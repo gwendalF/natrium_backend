@@ -28,38 +28,9 @@ async fn create_user(pool: web::Data<PgPool>, user: web::Json<PostUser>) -> Resu
     let created_user = User::create(db_pool, &user.email, &user.password).await?;
     Ok(HttpResponse::build(StatusCode::OK).json(created_user.uid))
 }
-// #[post("/user")]
-// async fn create_user(pool: web::Data<PgPool>, email: String, password: String) -> impl Responder {
-//     // Check if user already exist
-//     let db_pool = pool.get_ref();
-//     let previous_user = sqlx::query!("SELECT email FROM users WHERE email = $1", email)
-//         .fetch_optional(db_pool)
-//         .await
-//         .map_err(|err| NatriumError {
-//             message: None,
-//             cause: Some(err.to_string()),
-//             error_type: ErrorType::DatabaseError,
-//         })?;
-//     match previous_user {
-//         Some(_) => Err(NatriumError {
-//             message: Some("Email already in use".to_owned()),
-//             cause: None,
-//             error_type: ErrorType::DatabaseError,
-//         }),
-//         None => {
-//             let new_user = sqlx::query!(
-//                 "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING uid",
-//                 &email,
-//                 &password
-//             )
-//             .fetch_one(db_pool)
-//             .await
-//             .map_err(|err| NatriumError {
-//                 message: Some("Cannot create user".to_owned()),
-//                 cause: Some(err.to_string()),
-//                 error_type: ErrorType::DatabaseError,
-//             })?;
-//             Ok(HttpResponse::Ok().json(User::new(new_user.uid, &email, &password)))
-//         }
-//     }
-// }
+
+#[get("/{user_id}/hubs/")]
+async fn hubs_list(pool: web::Data<PgPool>, user_id: web::Path<u64>) -> Result<impl Responder> {
+    let db_pool = pool.get_ref();
+    Ok("hello")
+}

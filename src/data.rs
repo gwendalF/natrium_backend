@@ -1,2 +1,2 @@
-pub mod rack;
+pub mod measurer;
 pub mod temperature;

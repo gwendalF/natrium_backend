@@ -18,13 +18,12 @@ pub struct PostUser {
 
 impl User {
     pub async fn create(pool: &PgPool, email: &str, password: &str) -> Result<User> {
-        let previous_user = sqlx::query!("SELECT email FROM users WHERE email=$1", email)
+        let previous_user = sqlx::query!("SELECT email FROM user_account WHERE email=$1", email)
             .fetch_optional(pool)
             .await?;
         if previous_user.is_some() {
             return Err(AppError::AlreadyExist);
         } else {
-            // hash password
             let config = argon2::Config {
                 variant: argon2::Variant::Argon2id,
                 lanes: 8,
@@ -32,19 +31,17 @@ impl User {
                 thread_mode: ThreadMode::Parallel,
                 ..argon2::Config::default()
             };
-
             let mut salt = [0u8; 8];
             rand::thread_rng().fill(&mut salt);
             let hash = argon2::hash_encoded(password.as_bytes(), &salt, &config)?;
-            println!("hash: {}", &hash);
             let uid = sqlx::query!(
-                "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING uid",
+                "INSERT INTO user_account (email, password) VALUES ($1, $2) RETURNING id",
                 email,
                 &hash,
             )
             .fetch_one(pool)
             .await?
-            .uid;
+            .id;
             Ok(User {
                 uid,
                 email: email.to_owned(),
