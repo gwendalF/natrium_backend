@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 #[derive(Debug, Serialize)]
 pub struct User {
-    pub uid: i64,
+    pub id: i64,
     pub email: String,
     pub password: Option<String>,
 }
@@ -22,7 +22,7 @@ impl User {
             .fetch_optional(pool)
             .await?;
         if previous_user.is_some() {
-            return Err(AppError::AlreadyExist);
+            return Err(AppError::AlreadyExist(format!("Email {}", email)));
         } else {
             let config = argon2::Config {
                 variant: argon2::Variant::Argon2id,
@@ -34,7 +34,7 @@ impl User {
             let mut salt = [0u8; 8];
             rand::thread_rng().fill(&mut salt);
             let hash = argon2::hash_encoded(password.as_bytes(), &salt, &config)?;
-            let uid = sqlx::query!(
+            let id = sqlx::query!(
                 "INSERT INTO user_account (email, password) VALUES ($1, $2) RETURNING id",
                 email,
                 &hash,
@@ -43,7 +43,7 @@ impl User {
             .await?
             .id;
             Ok(User {
-                uid,
+                id,
                 email: email.to_owned(),
                 password: Some(password.to_owned()),
             })

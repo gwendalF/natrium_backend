@@ -1,5 +1,5 @@
 use crate::config::Config;
-use actix_web::{middleware, App, HttpServer};
+use actix_web::{error, middleware, web, App, HttpResponse, HttpServer};
 use sqlx::PgPool;
 
 mod auth;
@@ -17,9 +17,22 @@ async fn main() -> errors::Result<()> {
     HttpServer::new(move || {
         App::new()
             .data(db_pool.clone())
+            .app_data(web::JsonConfig::default().error_handler(|err, _req| {
+                error::InternalError::from_response(
+                    "Invalid json",
+                    HttpResponse::BadRequest()
+                        .content_type("application/json")
+                        .body(format!(r#"{{"error":"{}"}}"#, err)),
+                )
+                .into()
+            }))
             .wrap(middleware::NormalizePath::default())
-            .service(handlers::temp)
-            .service(handlers::hygro)
+            .service(
+                web::scope("/{user_id}")
+                    .service(handlers::hubs_list)
+                    .service(handlers::rack_temperatures)
+                    .service(handlers::add_temperature),
+            )
             .service(handlers::secure_data)
             .service(handlers::create_user)
     })

@@ -11,8 +11,8 @@ pub enum AppError {
     PermissionDenied,
     #[error("Ressource was not found")]
     NotFoundError,
-    #[error("Ressource already exist")]
-    AlreadyExist,
+    #[error("'{0}' already exist")]
+    AlreadyExist(String),
     #[error("Environnement error")]
     EnvironnementError,
     #[error("Database error")]
@@ -24,7 +24,7 @@ impl AppError {
         match self {
             Self::ServerError => "Unexpected error".to_owned(),
             Self::NotFoundError => "Not found".to_owned(),
-            Self::AlreadyExist => "Already exist".to_owned(),
+            Self::AlreadyExist(_) => "Already exist".to_owned(),
             Self::PermissionDenied => "Access denied".to_owned(),
             Self::EnvironnementError => "Environnement variable error".to_owned(),
             Self::DatabaseError(_) => "Database error".to_owned(),
@@ -44,7 +44,7 @@ impl ResponseError for AppError {
         match self {
             Self::NotFoundError => StatusCode::NOT_FOUND,
             Self::PermissionDenied => StatusCode::FORBIDDEN,
-            Self::AlreadyExist => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::AlreadyExist(_) => StatusCode::UNPROCESSABLE_ENTITY,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
