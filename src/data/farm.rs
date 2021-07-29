@@ -1,6 +1,6 @@
 use super::rack;
 use crate::{data::rack::Rack, errors::Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 #[derive(Serialize)]
@@ -11,7 +11,14 @@ pub struct Farm {
     name: String,
 }
 
-#[derive(Clone, Copy, Serialize, Debug)]
+#[derive(Deserialize)]
+pub struct InputFarm {
+    plant: PlantType,
+    racks: Vec<rack::Rack>,
+    name: String,
+}
+
+#[derive(Clone, Copy, Serialize, Debug, Deserialize)]
 pub enum PlantType {
     Tomato,
     Eggplant,
@@ -22,7 +29,7 @@ pub enum PlantType {
 }
 
 impl Farm {
-    pub async fn get_all(pool: &PgPool, user_id: i64) -> Result<Vec<Farm>> {
+    pub async fn get_all(pool: &PgPool, hub_id: i64) -> Result<Vec<Farm>> {
         let db_farms = sqlx::query!(
             "SELECT farm.id, name, species FROM farm 
             INNER JOIN plant ON plant.id=farm.plant_id 

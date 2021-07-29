@@ -61,3 +61,11 @@ async fn add_temperature(
     let inserted = Temperature::add(db_pool, temperature).await?;
     Ok(HttpResponse::build(StatusCode::OK).json(inserted))
 }
+
+#[get("/")]
+async fn user_detail(
+    pool: web::Data<PgPool>,
+    user_id: web::Path<(i64,)>,
+) -> Result<impl Responder> {
+    Ok(format!("hello user {}", user_id.0 .0))
+}

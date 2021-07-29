@@ -17,6 +17,8 @@ pub enum AppError {
     EnvironnementError,
     #[error("Database error")]
     DatabaseError(#[from] sqlx::Error),
+    #[error("Missing data: {0}")]
+    DataError(String),
 }
 
 impl AppError {
@@ -28,6 +30,7 @@ impl AppError {
             Self::PermissionDenied => "Access denied".to_owned(),
             Self::EnvironnementError => "Environnement variable error".to_owned(),
             Self::DatabaseError(_) => "Database error".to_owned(),
+            Self::DataError(_) => "Data error".to_owned(),
         }
     }
 }
@@ -79,6 +82,12 @@ impl From<argon2::Error> for AppError {
 
 impl From<std::io::Error> for AppError {
     fn from(_: std::io::Error) -> Self {
+        AppError::ServerError
+    }
+}
+
+impl From<actix_web::Error> for AppError {
+    fn from(_: actix_web::Error) -> Self {
         AppError::ServerError
     }
 }

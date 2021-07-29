@@ -12,6 +12,7 @@ actix-web-httpauth = "0.5"
 actix-web-grants = "2"
 thiserror = "1"
 rust-argon2 = "0.8"
+jsonwebtoken = "7"
 rand = "0.8"
 sqlx = { version = "0.4", features = [
     "postgres",
