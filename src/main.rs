@@ -1,7 +1,12 @@
-use crate::{auth::jwt_authentication::GoogleKey, config::Config};
+use std::sync::Mutex;
+
+use crate::{
+    auth::jwt_authentication::{GoogleKey, GoogleKeySet},
+    config::Config,
+    errors::AppError,
+};
 use actix_web::{error, middleware, web, App, HttpResponse, HttpServer};
 use actix_web_httpauth::middleware::HttpAuthentication;
-use jsonwebtoken::DecodingKey;
 use sqlx::PgPool;
 
 mod auth;
@@ -16,19 +21,28 @@ async fn main() -> errors::Result<()> {
     let config = Config::from_env()?;
     let database_url = std::env::var("DATABASE_URL")?;
     let db_pool = PgPool::connect(&database_url).await?;
-    let key =
-        sqlx::query!("SELECT modulus, exponent, expiration FROM token_key WHERE name='google'")
-            .fetch_one(&db_pool)
-            .await?;
-    let google_key = GoogleKey {
-        key: DecodingKey::from_rsa_components(&key.modulus, &key.exponent),
-        expiration: key.expiration,
-    };
-    HttpServer::new(move || {
+    let keys_record = sqlx::query!(
+        "SELECT modulus, exponent, kid, expiration FROM token_key WHERE provider='google'"
+    )
+    .fetch_all(&db_pool)
+    .await?;
+    let keys = keys_record
+        .iter()
+        .map(|db_record| GoogleKey {
+            kid: db_record.kid.to_owned(),
+            modulus: db_record.modulus.to_owned(),
+            exponent: db_record.exponent.to_owned(),
+        })
+        .collect::<Vec<_>>();
+    let expiration = keys_record[0].expiration;
+    println!("{:?}", expiration);
+    let key_set = web::Data::new(Mutex::new(GoogleKeySet { keys, expiration }));
+
+    Ok(HttpServer::new(move || {
         let auth = HttpAuthentication::bearer(auth::jwt_authentication::validator);
         App::new()
             .data(db_pool.clone())
-            .data(google_key.clone())
+            .app_data(key_set.clone())
             .app_data(web::JsonConfig::default().error_handler(|err, _req| {
                 error::InternalError::from_response(
                     "Invalid json",
@@ -52,7 +66,7 @@ async fn main() -> errors::Result<()> {
             )
     })
     .bind(format!("{}:{}", config.server.host, config.server.port))?
+    .workers(config.workers)
     .run()
-    .await?;
-    Ok(())
+    .await?)
 }

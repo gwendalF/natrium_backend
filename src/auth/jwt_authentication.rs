@@ -1,36 +1,80 @@
+use std::{collections::HashMap, sync::Mutex};
+
 use actix_web::dev::ServiceRequest;
 use actix_web_httpauth::extractors::bearer::BearerAuth;
-use chrono::NaiveDateTime;
-use jsonwebtoken::{decode, DecodingKey, Validation};
+use chrono::{Duration, NaiveDateTime, Utc};
+use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use lazy_static::lazy_static;
+use reqwest::RequestBuilder;
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 
 use crate::errors::AppError;
 
-pub async fn validator<'a>(
+pub async fn validator(
     req: ServiceRequest,
     credentials: BearerAuth,
 ) -> std::result::Result<ServiceRequest, actix_web::error::Error> {
-    let google_key = req.app_data::<GoogleKey>();
-    match google_key {
-        Some(key) => match decode_jwt(credentials.token(), key) {
-            Ok(_) => Ok(req),
-            Err(e) => Err(e),
-        },
-        None => Err(AppError::DataError(
-            "Missing public key to check authentication".to_owned(),
-        ))?,
+    let google_key_mutex = req
+        .app_data::<actix_web::web::Data<Mutex<GoogleKeySet>>>()
+        .ok_or_else(|| actix_web::error::ErrorUnauthorized(AppError::PermissionDenied))?;
+    {
+        let mut key = google_key_mutex
+            .as_ref()
+            .lock()
+            .expect("Cannot acquire mutex public key");
+        if key.expiration <= Utc::now().naive_utc() {
+            // update public key
+            let client = reqwest::Client::new();
+            let response = client
+                .get("https://www.googleapis.com/oauth2/v3/certs")
+                .send()
+                .await
+                .map_err(|e| actix_web::error::ErrorBadRequest(e))?;
+            let expiration = response.headers()["cache-control"].to_str().unwrap();
+            lazy_static! {
+                static ref RE: regex::Regex = regex::Regex::new("(max-age=)([0-9]*)").unwrap();
+            }
+            let expiration_value = RE.captures(expiration).unwrap().get(2).unwrap().as_str();
+            let expiration = (Utc::now()
+                + Duration::seconds(expiration_value.parse::<i64>().unwrap()))
+            .naive_utc();
+            let key_set = response
+                .json::<HashMap<String, Vec<HashMap<String, String>>>>()
+                .await
+                .unwrap();
+            let db_pool = req
+                .app_data::<actix_web::web::Data<PgPool>>()
+                .unwrap()
+                .as_ref();
+            for (i, key) in key_set["keys"].iter().enumerate() {
+                sqlx::query!(
+                    "UPDATE token_key
+                SET kid=$1,
+                modulus=$2,
+                exponent=$3,
+                expiration=$4
+                WHERE id=$5
+                ",
+                    key["kid"].clone(),
+                    key["n"].clone(),
+                    key["e"].clone(),
+                    expiration,
+                    (i + 1) as i32
+                )
+                .execute(db_pool)
+                .await
+                .unwrap();
+                println!("Update db key");
+            }
+            *key = GoogleKeySet {
+                expiration: (Utc::now() + Duration::days(3)).naive_local(),
+                keys: key.keys.clone(),
+            }
+        }
     }
-}
-
-fn decode_jwt(credentials: &str, key: &GoogleKey) -> Result<(), actix_web::Error> {
-    let decoding_key = DecodingKey::from_rsa_components("psh4_fDTsNZ1JkC2BV6nsU7681neTu8D37bMwTzzT-hugnePDyLaR8a_2HnqJaABndr0793WQCkiDolIjX1wn0a6zTpdgCJL-vaFe2FqPg19TWsZ8O6oKZc_rtWu-mE8Po7RGzi9qPLv9FxJPbiGq_HnMUo0EG7J4sN3IuzbU--Wmuz8LWALwmfpE9CfOym8x5GdUzbDL1ltuC2zXCaxARDnPs6vKR6eW1MZgXqgQ6ZQO9FklH_b5WJYLBDmHAb6CguoeU-AozaoVrBHgkWoDkku7nMWoetULtgBP_tYtFM8zvJ9IDD6abZM0jl-bsHIm3XFz0MgAJ9FmPti9-iShQ", "AQAB");
-    let token = decode::<Claims>(
-        credentials,
-        &decoding_key,
-        &Validation::new(jsonwebtoken::Algorithm::RS256),
-    )
-    .expect("Cannot decode token");
-    Ok(())
+    // garder un key_set en mutex (permet d'accéder à n'importe quelle clé selon le token)
+    Ok(req)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -40,8 +84,15 @@ struct Claims {
     iss: String,
 }
 
-#[derive(Clone)]
-pub struct GoogleKey<'a> {
-    pub key: DecodingKey<'a>,
+#[derive(Clone, Debug)]
+pub struct GoogleKeySet {
+    pub keys: Vec<GoogleKey>,
     pub expiration: NaiveDateTime,
+}
+
+#[derive(Clone, Debug)]
+pub struct GoogleKey {
+    pub kid: String,
+    pub modulus: String,
+    pub exponent: String,
 }
