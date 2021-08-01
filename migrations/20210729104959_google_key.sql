@@ -1,11 +1,11 @@
 -- Add migration script here
 BEGIN;
 CREATE TABLE IF NOT EXISTS token_key (
-    id SERIAL PRIMARY KEY,
-    kid TEXT NOT NULL,
-    provider VARCHAR(30) NOT NULL,
+    id SMALLSERIAL PRIMARY KEY,
+    kid TEXT UNIQUE NOT NULL,
+    provider VARCHAR(10) NOT NULL,
     modulus TEXT NOT NULL,
-    exponent TEXT NOT NULL,
+    exponent VARCHAR(10) NOT NULL,
     expiration TIMESTAMP NOT NULL
 );
 INSERT INTO token_key (kid, provider, modulus, exponent, expiration)

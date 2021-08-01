@@ -5,21 +5,21 @@ use sqlx::PgPool;
 
 #[derive(Serialize)]
 pub struct Temperature {
-    pub id: i64,
+    pub id: i32,
     pub temperature: f32,
     pub measured_at: NaiveDateTime,
-    pub localisation_id: i64,
+    pub localisation_id: i32,
 }
 
 #[derive(Deserialize)]
 pub struct UserTemperature {
     pub temperature: f32,
     pub measured_at: NaiveDateTime,
-    pub localisation_id: i64,
+    pub localisation_id: i32,
 }
 
 impl Temperature {
-    pub async fn get_by_rack(pool: &PgPool, localisation_id: i64) -> Result<Vec<Temperature>> {
+    pub async fn get_by_rack(pool: &PgPool, localisation_id: i32) -> Result<Vec<Temperature>> {
         Ok(sqlx::query_as!(Temperature,
             "SELECT id,temperature, measured_at, localisation_id FROM temperature WHERE localisation_id=$1",
             localisation_id

@@ -34,7 +34,7 @@ async fn create_user(pool: web::Data<PgPool>, user: web::Json<PostUser>) -> Resu
 }
 
 #[get("/hubs/")]
-async fn hubs_list(pool: web::Data<PgPool>, user_id: web::Path<(i64,)>) -> Result<impl Responder> {
+async fn hubs_list(pool: web::Data<PgPool>, user_id: web::Path<(i32,)>) -> Result<impl Responder> {
     let db_pool = pool.get_ref();
     let hubs_list = Hub::get_all(db_pool, user_id.into_inner().0).await?;
     Ok(HttpResponse::build(StatusCode::OK).json(hubs_list))
@@ -43,7 +43,7 @@ async fn hubs_list(pool: web::Data<PgPool>, user_id: web::Path<(i64,)>) -> Resul
 #[get("/{localisation_id}/temperatures/")]
 async fn rack_temperatures(
     pool: web::Data<PgPool>,
-    path: web::Path<(i64, i64)>,
+    path: web::Path<(i32, i32)>,
 ) -> Result<impl Responder> {
     let db_pool = pool.get_ref();
     let (user_id, localisation_id) = path.into_inner();
@@ -65,7 +65,7 @@ async fn add_temperature(
 #[get("/")]
 async fn user_detail(
     pool: web::Data<PgPool>,
-    user_id: web::Path<(i64,)>,
+    user_id: web::Path<(i32,)>,
 ) -> Result<impl Responder> {
     Ok(format!("hello user {}", user_id.0 .0))
 }

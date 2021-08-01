@@ -5,7 +5,7 @@ use sqlx::PgPool;
 
 #[derive(Serialize)]
 pub struct Farm {
-    id: i64,
+    id: i32,
     plant: PlantType,
     racks: Vec<rack::Rack>,
     name: String,
@@ -29,7 +29,7 @@ pub enum PlantType {
 }
 
 impl Farm {
-    pub async fn get_all(pool: &PgPool, hub_id: i64) -> Result<Vec<Farm>> {
+    pub async fn get_all(pool: &PgPool, hub_id: i32) -> Result<Vec<Farm>> {
         let db_farms = sqlx::query!(
             "SELECT farm.id, name, species FROM farm 
             INNER JOIN plant ON plant.id=farm.plant_id 

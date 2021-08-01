@@ -1,12 +1,9 @@
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
 
-use crate::{
-    auth::jwt_authentication::{GoogleKey, GoogleKeySet},
-    config::Config,
-    errors::AppError,
-};
+use crate::{auth::jwt_authentication::GoogleKeySet, config::Config};
 use actix_web::{error, middleware, web, App, HttpResponse, HttpServer};
 use actix_web_httpauth::middleware::HttpAuthentication;
+use jsonwebtoken::DecodingKey;
 use sqlx::PgPool;
 
 mod auth;
@@ -26,23 +23,26 @@ async fn main() -> errors::Result<()> {
     )
     .fetch_all(&db_pool)
     .await?;
-    let keys = keys_record
-        .iter()
-        .map(|db_record| GoogleKey {
-            kid: db_record.kid.to_owned(),
-            modulus: db_record.modulus.to_owned(),
-            exponent: db_record.exponent.to_owned(),
-        })
-        .collect::<Vec<_>>();
-    let expiration = keys_record[0].expiration;
-    println!("{:?}", expiration);
-    let key_set = web::Data::new(Mutex::new(GoogleKeySet { keys, expiration }));
 
+    let expiration = keys_record[0].expiration;
+    let key_map: HashMap<String, DecodingKey> = keys_record
+        .iter()
+        .map(|record| {
+            (
+                record.kid.clone(),
+                DecodingKey::from_rsa_components(&record.modulus, &record.exponent).into_static(),
+            )
+        })
+        .collect();
     Ok(HttpServer::new(move || {
         let auth = HttpAuthentication::bearer(auth::jwt_authentication::validator);
+        let goolge_key_set = GoogleKeySet {
+            expiration,
+            keys: key_map.clone(),
+        };
         App::new()
             .data(db_pool.clone())
-            .app_data(key_set.clone())
+            .app_data(web::Data::new(Mutex::new(goolge_key_set.clone())))
             .app_data(web::JsonConfig::default().error_handler(|err, _req| {
                 error::InternalError::from_response(
                     "Invalid json",

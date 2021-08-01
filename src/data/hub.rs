@@ -5,13 +5,13 @@ use sqlx::PgPool;
 
 #[derive(Serialize)]
 pub struct Hub {
-    id: i64,
+    id: i32,
     name: String,
     farms: Vec<farm::Farm>,
 }
 
 impl Hub {
-    pub async fn get_all(pool: &PgPool, user_id: i64) -> Result<Vec<Hub>> {
+    pub async fn get_all(pool: &PgPool, user_id: i32) -> Result<Vec<Hub>> {
         let hub_data = sqlx::query!(
             "SELECT hub.id, name FROM hub 
             INNER JOIN localisation 

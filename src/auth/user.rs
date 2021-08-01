@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 #[derive(Debug, Serialize)]
 pub struct User {
-    pub id: i64,
+    pub id: i32,
     pub email: String,
     pub password: Option<String>,
 }

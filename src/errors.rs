@@ -1,4 +1,5 @@
 use actix_web::{error::ResponseError, http::StatusCode, HttpResponse};
+use reqwest::header::ToStrError;
 use serde::Serialize;
 use thiserror::Error;
 pub type Result<T> = std::result::Result<T, AppError>;
@@ -8,7 +9,7 @@ pub enum AppError {
     #[error("An unexpected Error occured")]
     ServerError,
     #[error("You are not allowed to access")]
-    PermissionDenied,
+    PermissionDenied(String),
     #[error("Ressource was not found")]
     NotFoundError,
     #[error("'{0}' already exist")]
@@ -27,7 +28,7 @@ impl AppError {
             Self::ServerError => "Unexpected error".to_owned(),
             Self::NotFoundError => "Not found".to_owned(),
             Self::AlreadyExist(_) => "Already exist".to_owned(),
-            Self::PermissionDenied => "Access denied".to_owned(),
+            Self::PermissionDenied(e) => format!("Access denied, {}", e),
             Self::EnvironnementError => "Environnement variable error".to_owned(),
             Self::DatabaseError(_) => "Database error".to_owned(),
             Self::DataError(_) => "Data error".to_owned(),
@@ -46,7 +47,7 @@ impl ResponseError for AppError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::NotFoundError => StatusCode::NOT_FOUND,
-            Self::PermissionDenied => StatusCode::FORBIDDEN,
+            Self::PermissionDenied(_) => StatusCode::FORBIDDEN,
             Self::AlreadyExist(_) => StatusCode::UNPROCESSABLE_ENTITY,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -88,6 +89,18 @@ impl From<std::io::Error> for AppError {
 
 impl From<actix_web::Error> for AppError {
     fn from(_: actix_web::Error) -> Self {
+        AppError::ServerError
+    }
+}
+
+impl From<reqwest::Error> for AppError {
+    fn from(_: reqwest::Error) -> Self {
+        AppError::ServerError
+    }
+}
+
+impl From<ToStrError> for AppError {
+    fn from(_: ToStrError) -> Self {
         AppError::ServerError
     }
 }
