@@ -10,5 +10,6 @@
             "username": "natrium",
             "password": "natrium"
         }
-    ]
+    ],
+    "rust-analyzer.inlayHints.enable": true
 }

@@ -1,16 +1,21 @@
 use config::ConfigError;
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct ServerConfig {
     pub host: String,
     pub port: u32,
 }
+#[derive(Deserialize, Clone)]
+pub struct Key {
+    pub key: String,
+}
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Config {
     pub server: ServerConfig,
     pub workers: usize,
+    pub secret: Key,
 }
 
 impl Config {

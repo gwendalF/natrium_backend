@@ -1,9 +1,12 @@
 use std::{collections::HashMap, sync::Mutex};
 
-use crate::{auth::jwt_authentication::GoogleKeySet, config::Config};
+use crate::{
+    auth::jwt_authentication::{GoogleKeySet, JwtKey},
+    config::Config,
+};
 use actix_web::{error, middleware, web, App, HttpResponse, HttpServer};
 use actix_web_httpauth::middleware::HttpAuthentication;
-use jsonwebtoken::DecodingKey;
+use jsonwebtoken::{DecodingKey, EncodingKey};
 use sqlx::PgPool;
 
 mod auth;
@@ -11,6 +14,7 @@ mod config;
 mod data;
 mod errors;
 mod handlers;
+mod infrastructure;
 
 #[actix_web::main]
 async fn main() -> errors::Result<()> {
@@ -34,6 +38,9 @@ async fn main() -> errors::Result<()> {
             )
         })
         .collect();
+    let decoding = DecodingKey::from_secret(config.secret.key.as_bytes()).into_static();
+    let encoding = EncodingKey::from_secret(config.secret.key.as_bytes());
+    let jwt_key = JwtKey { encoding, decoding };
     Ok(HttpServer::new(move || {
         let auth = HttpAuthentication::bearer(auth::jwt_authentication::validator);
         let goolge_key_set = GoogleKeySet {
@@ -42,6 +49,7 @@ async fn main() -> errors::Result<()> {
         };
         App::new()
             .data(db_pool.clone())
+            .app_data(web::Data::new(jwt_key.clone()))
             .app_data(web::Data::new(Mutex::new(goolge_key_set.clone())))
             .app_data(web::JsonConfig::default().error_handler(|err, _req| {
                 error::InternalError::from_response(
@@ -54,8 +62,8 @@ async fn main() -> errors::Result<()> {
             }))
             .wrap(middleware::NormalizePath::default())
             .service(handlers::secure_data)
-            .service(handlers::create_user)
             .service(handlers::temp)
+            .service(handlers::google_login)
             .service(
                 web::scope("/{user_id}")
                     .wrap(auth)

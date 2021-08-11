@@ -1,13 +1,16 @@
 use crate::{
-    auth::user::{PostUser, User},
+    auth::jwt_authentication::{Claims, JwtKey, TokenResponse},
     data::{
         hub::Hub,
         temperature::{Temperature, UserTemperature},
     },
     errors::Result,
+    infrastructure::user::check_existing_user,
 };
-use actix_web::{get, http::StatusCode, post, web, HttpResponse, Responder};
+use actix_web::{get, http::StatusCode, post, web, HttpRequest, HttpResponse, Responder};
 use actix_web_grants::proc_macro::has_permissions;
+use chrono::{Duration, Utc};
+use jsonwebtoken::{encode, EncodingKey, Header};
 use sqlx::PgPool;
 
 #[get("/temperatures/")]
@@ -15,22 +18,10 @@ async fn temp() -> impl Responder {
     "Hello from temperatures"
 }
 
-#[get("/hygrometrie/")]
-async fn hygro() -> impl Responder {
-    "Hello from hygrometrie"
-}
-
 #[get("/secure/")]
 #[has_permissions("ROLE_ADMIN")]
 async fn secure_data() -> impl Responder {
     "Secured data"
-}
-
-#[post("/user/")]
-async fn create_user(pool: web::Data<PgPool>, user: web::Json<PostUser>) -> Result<impl Responder> {
-    let db_pool = pool.get_ref();
-    let created_user = User::create(db_pool, &user.email, &user.password).await?;
-    Ok(HttpResponse::build(StatusCode::OK).json(created_user.id))
 }
 
 #[get("/hubs/")]
@@ -68,4 +59,29 @@ async fn user_detail(
     user_id: web::Path<(i32,)>,
 ) -> Result<impl Responder> {
     Ok(format!("hello user {}", user_id.0 .0))
+}
+
+#[post("/google_login/")]
+async fn google_login(
+    keys: web::Data<JwtKey>,
+    pool: web::Data<PgPool>,
+    web::Json(google_sub): web::Json<String>,
+) -> Result<impl Responder> {
+    let existing_user_id = check_existing_user(&google_sub, pool.as_ref()).await?;
+    if let Some(id) = existing_user_id {
+        let claims = Claims::new(id);
+        let token = encode(&Header::default(), &claims, &keys.as_ref().encoding).unwrap();
+        Ok(HttpResponse::Ok().json(TokenResponse { token }))
+    } else {
+        Ok(HttpResponse::Ok().body(""))
+    }
+}
+
+#[get("/google_user/")]
+async fn create_google_user(
+    web::Json(google_sub): web::Json<String>,
+    pool: web::Data<PgPool>,
+    keys: web::Data<JwtKey>,
+) -> Result<impl Responder> {
+    Ok("a")
 }
