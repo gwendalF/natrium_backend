@@ -1,4 +1,6 @@
-use super::auth_provider;
+use crate::errors::Result;
+
+use super::jwt_authentication::TokenResponse;
 
 pub struct User {
     pub email: String,

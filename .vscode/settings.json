@@ -11,5 +11,6 @@
             "password": "natrium"
         }
     ],
-    "rust-analyzer.inlayHints.enable": true
+    "rust-analyzer.inlayHints.enable": true,
+    "rust-analyzer.experimental.procAttrMacros": true
 }
