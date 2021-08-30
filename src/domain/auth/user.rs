@@ -1,15 +1,7 @@
-use crate::errors::Result;
-
-use super::jwt_authentication::TokenResponse;
+use super::value_object::{email::EmailAddress, password::Password};
 
 pub struct User {
-    pub email: String,
-    password: Option<String>,
+    email: EmailAddress,
+    password: Option<Password>,
     pub id: i32,
-}
-
-impl User {
-    pub fn with_password(email: &str, password: Option<&str>) -> Self {
-        todo!()
-    }
 }

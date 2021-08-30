@@ -1,3 +1,5 @@
+use std::num::ParseIntError;
+
 use actix_web::{error::ResponseError, http::StatusCode, HttpResponse};
 use reqwest::header::ToStrError;
 use serde::Serialize;
@@ -20,6 +22,8 @@ pub enum AppError {
     DatabaseError(#[from] sqlx::Error),
     #[error("Missing data: {0}")]
     DataError(String),
+    #[error("JWT error: {0}")]
+    TokenError(String),
 }
 
 impl AppError {
@@ -32,6 +36,7 @@ impl AppError {
             Self::EnvironnementError => "Environnement variable error".to_owned(),
             Self::DatabaseError(_) => "Database error".to_owned(),
             Self::DataError(_) => "Data error".to_owned(),
+            Self::TokenError(_) => "Token error".to_owned(),
         }
     }
 }
@@ -101,6 +106,18 @@ impl From<reqwest::Error> for AppError {
 
 impl From<ToStrError> for AppError {
     fn from(_: ToStrError) -> Self {
+        AppError::ServerError
+    }
+}
+
+impl From<jsonwebtoken::errors::Error> for AppError {
+    fn from(e: jsonwebtoken::errors::Error) -> Self {
+        AppError::TokenError(e.to_string())
+    }
+}
+
+impl From<ParseIntError> for AppError {
+    fn from(_: ParseIntError) -> Self {
         AppError::ServerError
     }
 }

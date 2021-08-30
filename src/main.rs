@@ -1,21 +1,22 @@
 use crate::config::Config;
 use crate::domain::auth::jwt_authentication;
-use crate::errors::Result;
 use actix_web::{error, middleware, web, App, HttpResponse, HttpServer};
 use actix_web_httpauth::middleware::HttpAuthentication;
+use domain::auth::value_object::provider_key::GoogleKeySet;
+use domain::AppError;
+use domain::Result;
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use sqlx::PgPool;
-use std::{collections::HashMap, sync::Mutex};
+use std::collections::HashMap;
 
 mod application;
 mod config;
 mod domain;
-mod errors;
 mod handlers;
 mod infrastructure;
 
 #[actix_web::main]
-async fn main() -> errors::Result<()> {
+async fn main() -> Result<()> {
     dotenv::dotenv().ok();
     let config = Config::from_env()?;
     let database_url = std::env::var("DATABASE_URL")?;
@@ -38,17 +39,17 @@ async fn main() -> errors::Result<()> {
         .collect();
     let decoding = DecodingKey::from_secret(config.secret.key.as_bytes()).into_static();
     let encoding = EncodingKey::from_secret(config.secret.key.as_bytes());
-    let jwt_key = jwt_authentication::JwtKey { encoding, decoding };
+    let jwt_key = jwt_authentication::AppKey { encoding, decoding };
     Ok(HttpServer::new(move || {
-        let auth = HttpAuthentication::bearer(jwt_authentication::validator);
-        let goolge_key_set = jwt_authentication::GoogleKeySet {
+        let _auth = HttpAuthentication::bearer(jwt_authentication::validator);
+        let goolge_key_set = GoogleKeySet {
             expiration,
             keys: key_map.clone(),
         };
         App::new()
             .data(db_pool.clone())
             .app_data(web::Data::new(jwt_key.clone()))
-            .app_data(web::Data::new(Mutex::new(goolge_key_set.clone())))
+            .app_data(web::Data::new(goolge_key_set.clone()))
             .app_data(web::JsonConfig::default().error_handler(|err, _req| {
                 error::InternalError::from_response(
                     "Invalid json",

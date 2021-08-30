@@ -1,6 +1,5 @@
-use std::{collections::HashMap, sync::Mutex};
+use crate::AppError;
 
-use crate::errors::AppError;
 use actix_web::{
     dev::{Path, ServiceRequest},
     http::header::CacheDirective,
@@ -9,24 +8,26 @@ use actix_web::{
 use actix_web_grants::permissions::AttachPermissions;
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use chrono::{Duration, NaiveDateTime, Utc};
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, EncodingKey, Validation};
-use lazy_static::lazy_static;
+use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
+
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+
+use std::collections::HashMap;
 use std::convert::TryFrom;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub aud: String,
     pub sub: String,
     pub exp: usize,
     pub iss: String,
-    pub permissions: Vec<String>,
+    pub permissions: Option<Vec<String>>,
 }
 
 impl Claims {
     pub fn new(id: i32) -> Self {
         let exp = usize::try_from((Utc::now() + Duration::hours(1)).timestamp()).unwrap();
-        let permissions = vec![format!("READ_{}", id)];
+        let permissions = Some(vec![format!("READ_{}", id)]);
         Claims {
             aud: "natrium".to_owned(),
             sub: id.to_string(),
@@ -37,19 +38,13 @@ impl Claims {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct TokenResponse {
     pub token: String,
 }
 
-#[derive(Clone, Debug)]
-pub struct GoogleKeySet {
-    pub keys: HashMap<String, DecodingKey<'static>>,
-    pub expiration: NaiveDateTime,
-}
-
 #[derive(Debug, Clone)]
-pub struct JwtKey {
+pub struct AppKey {
     pub encoding: EncodingKey,
     pub decoding: DecodingKey<'static>,
 }
@@ -61,7 +56,9 @@ pub async fn validator(
     if let Some(decoding_key) = req.app_data::<web::Data<DecodingKey>>() {
         match decode::<Claims>(credentials.token(), decoding_key, &Validation::default()) {
             Ok(token) => {
-                req.attach(token.claims.permissions);
+                if let Some(perm) = token.claims.permissions {
+                    req.attach(perm);
+                }
                 Ok(req)
             }
             Err(e) => Err(AppError::PermissionDenied(e.to_string()))?,

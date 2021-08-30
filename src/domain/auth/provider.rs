@@ -1,6 +1,6 @@
-use super::jwt_authentication::GoogleKeySet;
+use super::ports::ProviderKeySet;
 
 pub enum AuthProvider {
-    Google(GoogleKeySet),
+    Google(ProviderKeySet),
     Facebook,
 }
