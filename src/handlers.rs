@@ -1,4 +1,4 @@
-use crate::domain::auth::value_object::provider_key::GoogleKeySet;
+use crate::domain::auth::auth_types::provider_key::GoogleKeySet;
 use crate::Result;
 use crate::{
     application,

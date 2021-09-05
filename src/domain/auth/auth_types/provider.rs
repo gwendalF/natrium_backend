@@ -1,4 +1,4 @@
-use super::ports::ProviderKeySet;
+use crate::domain::auth::ports::ProviderKeySet;
 
 pub enum AuthProvider {
     Google(ProviderKeySet),

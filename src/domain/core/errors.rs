@@ -24,6 +24,8 @@ pub enum AppError {
     DataError(String),
     #[error("JWT error: {0}")]
     TokenError(String),
+    #[error("User does not exist")]
+    UserNotFoundEror,
 }
 
 impl AppError {
@@ -37,6 +39,7 @@ impl AppError {
             Self::DatabaseError(_) => "Database error".to_owned(),
             Self::DataError(_) => "Data error".to_owned(),
             Self::TokenError(_) => "Token error".to_owned(),
+            Self::UserNotFoundEror => "User does not exist".to_owned(),
         }
     }
 }

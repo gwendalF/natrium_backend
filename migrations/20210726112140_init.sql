@@ -3,11 +3,12 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS user_account (
     id SERIAL PRIMARY KEY,
     email VARCHAR(50) NOT NULL UNIQUE,
-    password VARCHAR(64)
+    password VARCHAR(64),
+    salt VARCHAR(32)
 );
-INSERT INTO user_account (email, password)
-VALUES ('first@user.com', '123'),
-    ('Second user email', '123') ON CONFLICT DO NOTHING;
+INSERT INTO user_account (email, password, salt)
+VALUES ('first@user.com', '123', '123456789'),
+    ('Second user email', '123', '012345678') ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS provider_user_mapper(
     id SERIAL PRIMARY KEY,
     name VARCHAR(30) UNIQUE NOT NULL,

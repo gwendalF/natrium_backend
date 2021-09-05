@@ -8,4 +8,6 @@ pub enum AuthError {
     WrongPassword,
     #[error("User already exist")]
     UserAlreadyExist,
+    #[error("Invalid email address")]
+    InvalidEmail,
 }

@@ -1,24 +1,13 @@
-use crate::domain::core::value_object::ValueObject;
 use lazy_static::lazy_static;
 use regex::Regex;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-enum EmailError {
+pub enum EmailError {
     #[error("Invalid email")]
     InvalidEmail,
 }
-pub struct EmailAddress(Result<String, EmailError>);
-
-impl ValueObject<String, EmailError> for EmailAddress {
-    fn value(&self) -> Result<&String, &EmailError> {
-        self.0.as_ref()
-    }
-
-    fn is_valid(&self) -> bool {
-        self.0.is_ok()
-    }
-}
+pub struct EmailAddress(String);
 
 fn validate(email: String) -> Result<String, EmailError> {
     lazy_static! {
@@ -42,7 +31,7 @@ fn validate(email: String) -> Result<String, EmailError> {
 }
 
 impl EmailAddress {
-    pub fn new(email_string: String) -> EmailAddress {
-        EmailAddress(validate(email_string))
+    pub fn new(email_string: String) -> Result<EmailAddress, EmailError> {
+        Ok(EmailAddress(validate(email_string)?))
     }
 }

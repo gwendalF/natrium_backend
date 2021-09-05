@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::domain::auth::jwt_authentication;
 use actix_web::{error, middleware, web, App, HttpResponse, HttpServer};
 use actix_web_httpauth::middleware::HttpAuthentication;
-use domain::auth::value_object::provider_key::GoogleKeySet;
+use domain::auth::auth_types::provider_key::GoogleKeySet;
 use domain::AppError;
 use domain::Result;
 use jsonwebtoken::{DecodingKey, EncodingKey};
