@@ -24,6 +24,16 @@ pub struct Claims {
     pub permissions: Option<Vec<String>>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ProviderClaims {
+    pub aud: String,
+    pub sub: String,
+    pub exp: usize,
+    pub iss: String,
+    pub email: String,
+    pub email_verified: bool,
+}
+
 impl Claims {
     pub fn new(id: i32) -> Self {
         let exp = usize::try_from((Utc::now() + Duration::hours(1)).timestamp()).unwrap();

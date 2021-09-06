@@ -7,7 +7,8 @@ use thiserror::Error;
 
 pub struct Credential {
     pub email: EmailAddress,
-    hash: Password,
+    pub hash: Password,
+    pub salt: Salt,
 }
 
 #[derive(Error, Debug)]
@@ -18,7 +19,7 @@ pub enum CredentialError {
     InvalidPassword(#[from] PasswordError),
 }
 
-pub struct CredentialDTO {
-    pub email: String,
-    pub password: String,
+pub struct ClearCredential {
+    email: EmailAddress,
+    password: String,
 }

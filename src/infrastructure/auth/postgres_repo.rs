@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
 use crate::domain::auth::auth_types::credential::Credential;
+use crate::domain::auth::auth_types::key_identifier::Kid;
+use crate::domain::auth::auth_types::password::Password;
+use crate::domain::auth::auth_types::provider::AuthProvider;
 use crate::domain::auth::auth_types::salt::Salt;
 use crate::domain::auth::ports::{ProviderKeySet, Token, UserRepository};
 
@@ -64,7 +67,9 @@ impl UserRepository for UserRepositoryImpl {
             .await?;
             let key = DecodingKey::from_rsa_components(&decoding_key["n"], &decoding_key["e"])
                 .into_static();
-            new_keys.insert(decoding_key["kid"].to_owned(), key);
+            let kid =
+                Kid::new(decoding_key["kid"].to_owned()).expect("Manage different error type");
+            new_keys.insert(kid, key);
         }
         let provider_key = ProviderKeySet {
             keys: new_keys,
@@ -74,7 +79,7 @@ impl UserRepository for UserRepositoryImpl {
         Ok(())
     }
 
-    async fn check_existing_user(&self, provider_subject: &str) -> Result<i32> {
+    async fn check_existing_user_provider(&self, provider_subject: &str) -> Result<i32> {
         if let Some(record) = sqlx::query!(
             r#"
         SELECT user_account.id from user_account JOIN provider_user_mapper
@@ -93,18 +98,74 @@ impl UserRepository for UserRepositoryImpl {
     }
 
     async fn create_user_credential(&self, credential: &Credential) -> Result<i32> {
-        todo!()
+        if let Some(user_id) = sqlx::query!(
+            r#"
+            INSERT INTO user_account (email, password, salt)
+            VALUES ($1, $2, $3)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+        "#,
+            &credential.email.value(),
+            &credential.hash.value(),
+            &credential.salt.value()
+        )
+        .fetch_optional(&self.repo)
+        .await?
+        {
+            Ok(user_id.id)
+        } else {
+            Err(AppError::PermissionDenied(
+                "Need to manage errors properly".to_owned(),
+            ))
+        }
     }
 
-    async fn save_credential(&self, credential: &Credential, salt: &Salt) -> Result<()> {
-        todo!()
+    async fn create_user_subject(
+        &self,
+        provider_subject: &str,
+        provider_email: &EmailAddress,
+    ) -> Result<i32> {
+        let user_id: i32 = sqlx::query!(
+            r#"
+            INSERT INTO user_account (email) 
+            VALUES ($1)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+        "#,
+            &provider_email.value()
+        )
+        .fetch_one(&self.repo)
+        .await?
+        .id;
+        let provider_user_mapper_id: i32 = sqlx::query!(
+            r#"
+            INSERT INTO provider_user_mapper (name, subject, user_id)
+            VALUES ('google', $1, $2)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+        "#,
+            provider_subject,
+            user_id
+        )
+        .fetch_one(&self.repo)
+        .await?
+        .id;
+        Ok(user_id)
     }
 
-    async fn create_user_subject(&self, provider_subject: &str) -> Result<i32> {
-        todo!()
+    async fn check_existing_user_email(&self, email: &EmailAddress) -> Result<i32> {
+        Ok(sqlx::query!(
+            r#"
+            SELECT id FROM user_account 
+            WHERE email=$1
+        "#,
+            email.value()
+        )
+        .fetch_one(&self.repo)
+        .await?
+        .id)
     }
-
-    async fn credential_login(&self, credential: &Credential) -> Result<Token> {
+    async fn validate_password(&self, credential: &Credential) -> bool {
         todo!()
     }
 }

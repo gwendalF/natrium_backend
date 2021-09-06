@@ -34,4 +34,8 @@ impl EmailAddress {
     pub fn new(email_string: String) -> Result<EmailAddress, EmailError> {
         Ok(EmailAddress(validate(email_string)?))
     }
+
+    pub fn value(&self) -> &str {
+        &self.0
+    }
 }

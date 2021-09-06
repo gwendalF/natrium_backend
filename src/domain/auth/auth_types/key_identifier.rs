@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Kid(String);
 
 impl Kid {

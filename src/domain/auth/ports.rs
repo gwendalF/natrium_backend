@@ -17,9 +17,9 @@ pub struct Token(pub String);
 
 #[async_trait]
 pub trait IAuthService {
-    async fn provider_login(&self, provider_token: &Token, provider: AuthProvider)
+    async fn login_provider(&self, provider_token: &Token, provider: AuthProvider)
         -> Result<Token>;
-    async fn credential_login(&self, credential: &Credential) -> Result<Token>;
+    async fn login_credential(&self, credential: &Credential) -> Result<Token>;
     async fn register_credential(&self, credential: &Credential) -> Result<Token>;
     async fn register_provider(
         &self,
@@ -29,17 +29,20 @@ pub trait IAuthService {
 }
 
 pub struct ProviderKeySet {
-    pub keys: HashMap<String, DecodingKey<'static>>,
+    pub keys: HashMap<Kid, DecodingKey<'static>>,
     pub expiration: NaiveDateTime,
 }
 
 #[async_trait]
 pub trait UserRepository {
     async fn update_key_set(&self, provider_key_set: &mut ProviderKeySet) -> Result<()>;
-    async fn check_existing_user(&self, provider_subject: &str) -> Result<i32>;
-    async fn save_user_credential(&self, credential: &Credential, salt: &Salt) -> Result<i32>;
-    async fn save_user_provider(&self, provider: AuthProvider, )
-    async fn create_user_subject(&self, provider_subject: &str) -> Result<i32>;
-    async fn credential_login(&self, credential: &Credential) -> Result<Token>;
-    async fn save_credential(&self, credential: &Credential, salt: &Salt) -> Result<()>;
+    async fn check_existing_user_provider(&self, provider_subject: &str) -> Result<i32>;
+    async fn check_existing_user_email(&self, email: &EmailAddress) -> Result<i32>;
+    async fn validate_password(&self, credential: &Credential) -> bool;
+    async fn create_user_subject(
+        &self,
+        provider_subject: &str,
+        provider_email: &EmailAddress,
+    ) -> Result<i32>;
+    async fn create_user_credential(&self, credential: &Credential) -> Result<i32>;
 }

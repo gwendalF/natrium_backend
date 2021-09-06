@@ -2,8 +2,13 @@ use async_trait::async_trait;
 use jsonwebtoken::{decode, decode_header, encode, Header, Validation};
 
 use crate::domain::auth::{
-    auth_types::{credential::Credential, key_identifier::Kid, provider::AuthProvider},
-    jwt_authentication::{AppKey, Claims},
+    auth_types::{
+        credential::{self, Credential},
+        email::EmailAddress,
+        key_identifier::Kid,
+        provider::AuthProvider,
+    },
+    jwt_authentication::{AppKey, Claims, ProviderClaims},
     ports::{IAuthService, ProviderKeySet, Token, UserRepository},
 };
 use crate::{AppError, Result};
@@ -17,20 +22,40 @@ impl<T> IAuthService for AuthService<T>
 where
     T: UserRepository + Send + Sync,
 {
-    async fn provider_login(
+    async fn login_provider(
         &self,
         provider_token: &Token,
         provider: AuthProvider,
     ) -> Result<Token> {
-        let claims = decode_provider(provider, provider_token, &self.repository).await?;
+        let provider_claims = decode_provider(provider, provider_token, &self.repository).await?;
+        let user_id = self
+            .repository
+            .check_existing_user_provider(&provider_claims.sub)
+            .await?;
+        let claims = Claims::new(user_id);
         Ok(Token(encode(
             &Header::default(),
             &claims,
             &self.application_key.encoding,
         )?))
     }
-    async fn credential_login(&self, credential: &Credential) -> Result<Token> {
-        self.repository.credential_login(credential).await
+    async fn login_credential(&self, credential: &Credential) -> Result<Token> {
+        let user_id = self
+            .repository
+            .check_existing_user_email(&credential.email)
+            .await?;
+        if self.repository.validate_password(&credential).await {
+            let claims = Claims::new(user_id);
+            Ok(Token(encode(
+                &Header::default(),
+                &claims,
+                &self.application_key.encoding,
+            )?))
+        } else {
+            Err(AppError::PermissionDenied(
+                "Wrong email/password combination".to_owned(),
+            ))
+        }
     }
 
     async fn register_credential(&self, credential: &Credential) -> Result<Token> {
@@ -50,7 +75,14 @@ where
         provider: AuthProvider,
     ) -> Result<Token> {
         let claims = decode_provider(provider, provider_token, &self.repository).await?;
-        self.repository.create_user_subject(&claims.sub).await?;
+        let user_id = self
+            .repository
+            .create_user_subject(
+                &claims.sub,
+                &EmailAddress::new(claims.email).expect("Error to be managed"),
+            )
+            .await?;
+        let claims = Claims::new(user_id);
         Ok(Token(encode(
             &Header::default(),
             &claims,
@@ -59,7 +91,11 @@ where
     }
 }
 
-async fn decode_provider<T>(provider: AuthProvider, token: &Token, repository: &T) -> Result<Claims>
+async fn decode_provider<T>(
+    provider: AuthProvider,
+    token: &Token,
+    repository: &T,
+) -> Result<ProviderClaims>
 where
     T: UserRepository + Sync + Send,
 {
@@ -76,10 +112,9 @@ where
                     .ok_or_else(|| AppError::TokenError("Missing key identifier".to_owned()))?,
             )
             .map_err(|_| AppError::TokenError("Key identifier too long".to_owned()))?;
-            let key = kid.value();
-            let decoding_key = &key_set.keys[key];
+            let decoding_key = &key_set.keys[&kid];
             let provider_claims =
-                decode::<Claims>(&token.0, decoding_key, &Validation::default())?.claims;
+                decode::<ProviderClaims>(&token.0, decoding_key, &Validation::default())?.claims;
             match provider_claims.iss.as_ref() {
                 "accounts.google.com" | "https://accounts.google.com" => Ok(provider_claims),
                 _ => Err(AppError::PermissionDenied(

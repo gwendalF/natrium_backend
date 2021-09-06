@@ -47,4 +47,8 @@ impl Password {
     pub fn from_hash(hash: String) -> Password {
         todo!()
     }
+
+    pub fn value(&self) -> &str {
+        &self.0
+    }
 }
