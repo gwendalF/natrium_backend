@@ -1,3 +1,5 @@
+use std::sync::Mutex;
+
 use crate::domain::auth::auth_types::credential::{ClearCredential, Credential};
 use crate::domain::auth::auth_types::provider::AuthProvider;
 use crate::domain::auth::ports::{IAuthService, ProviderKeySet, Token};
@@ -25,19 +27,16 @@ async fn login_credential<T: IAuthService>(
 async fn register_provider<T: IAuthService>(
     service: web::Data<T>,
     web::Json(body): web::Json<Token>,
-    req: HttpRequest,
+    key_set: web::Data<Mutex<ProviderKeySet>>,
 ) -> Result<web::Json<Token>> {
-    let key_set = req.app_data::<ProviderKeySet>().expect("Todo later");
-    let provider = AuthProvider::Google(key_set.clone());
-    Ok(web::Json(service.register_provider(&body, provider).await?))
+    todo!()
+    // Ok(web::Json(service.register_provider(&body, provider).await?))
 }
 
 async fn login_provider<T: IAuthService>(
     service: web::Data<T>,
     web::Json(body): web::Json<Token>,
-    req: HttpRequest,
+    key_set: web::Data<ProviderKeySet>,
 ) -> Result<web::Json<Token>> {
-    let key_set = req.app_data::<ProviderKeySet>().expect("Todo later");
-    let provider = AuthProvider::Google(key_set.clone());
-    Ok(web::Json(service.login_provider(&body, provider).await?))
+    todo!()
 }

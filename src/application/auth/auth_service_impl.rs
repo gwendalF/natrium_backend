@@ -27,7 +27,7 @@ where
     async fn login_provider(
         &self,
         provider_token: &Token,
-        provider: AuthProvider,
+        provider: &AuthProvider,
     ) -> Result<Token> {
         let provider_claims = decode_provider(provider, provider_token, &self.repository).await?;
         let user_id = self
@@ -41,6 +41,7 @@ where
             &self.application_key.encoding,
         )?))
     }
+
     async fn login_credential(&self, credential: &ClearCredential) -> Result<Token> {
         let user_email =
             EmailAddress::new(credential.email.clone()).expect("error management really needed");
@@ -76,7 +77,7 @@ where
     async fn register_provider(
         &self,
         provider_token: &Token,
-        provider: AuthProvider,
+        provider: &AuthProvider,
     ) -> Result<Token> {
         let claims = decode_provider(provider, provider_token, &self.repository).await?;
         let user_id = self
@@ -96,7 +97,7 @@ where
 }
 
 async fn decode_provider<T>(
-    provider: AuthProvider,
+    provider: &AuthProvider,
     token: &Token,
     repository: &T,
 ) -> Result<ProviderClaims>
@@ -106,7 +107,8 @@ where
     let header = decode_header(&token.0)?;
     match provider {
         AuthProvider::Facebook => unimplemented!(),
-        AuthProvider::Google(mut key_set) => {
+        AuthProvider::Google(key_set) => {
+            let mut key_set = key_set.lock().expect("Mutex lock error");
             if key_set.expiration <= chrono::Utc::now().naive_utc() {
                 repository.update_key_set(&mut key_set).await?;
             }

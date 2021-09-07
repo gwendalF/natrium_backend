@@ -9,6 +9,7 @@ use domain::Result;
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use sqlx::PgPool;
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 mod application;
 mod config;
@@ -40,15 +41,15 @@ async fn main() -> Result<()> {
     let encoding = EncodingKey::from_secret(config.secret.key.as_bytes());
     let jwt_key = jwt_authentication::AppKey { encoding, decoding };
     Ok(HttpServer::new(move || {
-        let _auth = HttpAuthentication::bearer(jwt_authentication::validator);
-        let goolge_key_set = ProviderKeySet {
+        let auth = HttpAuthentication::bearer(jwt_authentication::validator);
+        let goolge_key_set = Mutex::new(ProviderKeySet {
             expiration,
             keys: key_map.clone(),
-        };
+        });
         App::new()
             .data(db_pool.clone())
             .app_data(web::Data::new(jwt_key.clone()))
-            .app_data(web::Data::new(goolge_key_set.clone()))
+            .app_data(web::Data::new(goolge_key_set).clone())
             .app_data(web::JsonConfig::default().error_handler(|err, _req| {
                 error::InternalError::from_response(
                     "Invalid json",

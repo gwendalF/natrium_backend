@@ -23,7 +23,7 @@ pub trait IAuthService {
     async fn register_provider(
         &self,
         provider_token: &Token,
-        provider: AuthProvider,
+        provider: &AuthProvider,
     ) -> Result<Token>;
 }
 
