@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
+use super::{auth_types::credential::CredentialError, errors::AuthError};
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub aud: String,
@@ -71,7 +73,7 @@ pub async fn validator(
                 }
                 Ok(req)
             }
-            Err(e) => Err(AppError::PermissionDenied(e.to_string()))?,
+            Err(e) => Err(AppError::AuthenticationError(AuthError::Token))?,
         }
     } else {
         Err(AppError::ServerError)?

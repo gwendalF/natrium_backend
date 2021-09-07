@@ -4,42 +4,37 @@ use actix_web::{error::ResponseError, http::StatusCode, HttpResponse};
 use reqwest::header::ToStrError;
 use serde::Serialize;
 use thiserror::Error;
+
+use crate::domain::auth::{
+    auth_types::key_identifier::{Kid, KidError},
+    errors::AuthError,
+};
 pub type Result<T> = std::result::Result<T, AppError>;
 
 #[derive(Error, Debug)]
 pub enum AppError {
     #[error("An unexpected Error occured")]
     ServerError,
-    #[error("You are not allowed to access")]
-    PermissionDenied(String),
-    #[error("Ressource was not found")]
-    NotFoundError,
-    #[error("'{0}' already exist")]
-    AlreadyExist(String),
     #[error("Environnement error")]
     EnvironnementError,
     #[error("Database error")]
     DatabaseError(#[from] sqlx::Error),
-    #[error("Missing data: {0}")]
-    DataError(String),
-    #[error("JWT error: {0}")]
-    TokenError(String),
-    #[error("User does not exist")]
-    UserNotFoundEror,
+    #[error("Authentication error")]
+    AuthenticationError(#[from] AuthError),
 }
 
 impl AppError {
     fn name(&self) -> String {
         match self {
             Self::ServerError => "Unexpected error".to_owned(),
-            Self::NotFoundError => "Not found".to_owned(),
-            Self::AlreadyExist(_) => "Already exist".to_owned(),
-            Self::PermissionDenied(e) => format!("Access denied, {}", e),
             Self::EnvironnementError => "Environnement variable error".to_owned(),
             Self::DatabaseError(_) => "Database error".to_owned(),
-            Self::DataError(_) => "Data error".to_owned(),
-            Self::TokenError(_) => "Token error".to_owned(),
-            Self::UserNotFoundEror => "User does not exist".to_owned(),
+            Self::AuthenticationError(e) => match e {
+                &AuthError::Credential(_) => "Credential error".to_owned(),
+                &AuthError::Email(_) => "Email error".to_owned(),
+                &AuthError::Token => "Token error".to_owned(),
+                _ => "Unexpected error".to_owned(),
+            },
         }
     }
 }
@@ -54,9 +49,6 @@ struct ErrorResponse {
 impl ResponseError for AppError {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::NotFoundError => StatusCode::NOT_FOUND,
-            Self::PermissionDenied(_) => StatusCode::FORBIDDEN,
-            Self::AlreadyExist(_) => StatusCode::UNPROCESSABLE_ENTITY,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -115,12 +107,18 @@ impl From<ToStrError> for AppError {
 
 impl From<jsonwebtoken::errors::Error> for AppError {
     fn from(e: jsonwebtoken::errors::Error) -> Self {
-        AppError::TokenError(e.to_string())
+        AppError::AuthenticationError(AuthError::Token)
     }
 }
 
 impl From<ParseIntError> for AppError {
     fn from(_: ParseIntError) -> Self {
         AppError::ServerError
+    }
+}
+
+impl From<KidError> for AppError {
+    fn from(_: KidError) -> Self {
+        AppError::AuthenticationError(AuthError::Kid(KidError::InvalidKid))
     }
 }

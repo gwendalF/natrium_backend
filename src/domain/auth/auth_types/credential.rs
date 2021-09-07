@@ -3,6 +3,7 @@ use super::{
     password::{Password, PasswordError},
     salt::Salt,
 };
+use serde::Deserialize;
 use thiserror::Error;
 
 pub struct Credential {
@@ -19,7 +20,8 @@ pub enum CredentialError {
     InvalidPassword(#[from] PasswordError),
 }
 
+#[derive(Deserialize)]
 pub struct ClearCredential {
-    email: EmailAddress,
-    password: String,
+    pub email: String,
+    pub password: String,
 }

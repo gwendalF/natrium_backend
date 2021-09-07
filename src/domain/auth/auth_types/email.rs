@@ -6,6 +6,8 @@ use thiserror::Error;
 pub enum EmailError {
     #[error("Invalid email")]
     InvalidEmail,
+    #[error("Email already exist")]
+    AlreadyUsedEmail,
 }
 pub struct EmailAddress(String);
 

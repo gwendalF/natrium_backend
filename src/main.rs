@@ -2,7 +2,8 @@ use crate::config::Config;
 use crate::domain::auth::jwt_authentication;
 use actix_web::{error, middleware, web, App, HttpResponse, HttpServer};
 use actix_web_httpauth::middleware::HttpAuthentication;
-use domain::auth::auth_types::provider_key::GoogleKeySet;
+use domain::auth::auth_types::key_identifier::Kid;
+use domain::auth::ports::ProviderKeySet;
 use domain::AppError;
 use domain::Result;
 use jsonwebtoken::{DecodingKey, EncodingKey};
@@ -12,7 +13,6 @@ use std::collections::HashMap;
 mod application;
 mod config;
 mod domain;
-mod handlers;
 mod infrastructure;
 
 #[actix_web::main]
@@ -26,23 +26,22 @@ async fn main() -> Result<()> {
     )
     .fetch_all(&db_pool)
     .await?;
-
     let expiration = keys_record[0].expiration;
-    let key_map: HashMap<String, DecodingKey> = keys_record
+    let key_map: HashMap<Kid, DecodingKey> = keys_record
         .iter()
         .map(|record| {
-            (
-                record.kid.clone(),
+            Ok((
+                Kid::new(record.kid.clone())?,
                 DecodingKey::from_rsa_components(&record.modulus, &record.exponent).into_static(),
-            )
+            ))
         })
-        .collect();
+        .collect::<Result<HashMap<Kid, DecodingKey>>>()?;
     let decoding = DecodingKey::from_secret(config.secret.key.as_bytes()).into_static();
     let encoding = EncodingKey::from_secret(config.secret.key.as_bytes());
     let jwt_key = jwt_authentication::AppKey { encoding, decoding };
     Ok(HttpServer::new(move || {
         let _auth = HttpAuthentication::bearer(jwt_authentication::validator);
-        let goolge_key_set = GoogleKeySet {
+        let goolge_key_set = ProviderKeySet {
             expiration,
             keys: key_map.clone(),
         };
@@ -60,8 +59,6 @@ async fn main() -> Result<()> {
                 .into()
             }))
             .wrap(middleware::NormalizePath::default())
-            .service(handlers::temp)
-            .service(handlers::google_login)
     })
     .bind(format!("{}:{}", config.server.host, config.server.port))?
     .workers(config.workers)

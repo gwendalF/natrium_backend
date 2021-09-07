@@ -9,6 +9,8 @@ pub enum PasswordError {
     InvalidPassword,
     #[error("Invalid hash")]
     InvalidHash,
+    #[error("Password not found")]
+    PasswordNotFound,
 }
 pub struct Password(String);
 

@@ -3,15 +3,17 @@ use jsonwebtoken::{decode, decode_header, encode, Header, Validation};
 
 use crate::domain::auth::{
     auth_types::{
-        credential::{self, Credential},
+        credential::{ClearCredential, Credential, CredentialError},
         email::EmailAddress,
-        key_identifier::Kid,
+        key_identifier::{Kid, KidError},
+        password::{Password, PasswordError},
         provider::AuthProvider,
     },
+    errors::AuthError,
     jwt_authentication::{AppKey, Claims, ProviderClaims},
-    ports::{IAuthService, ProviderKeySet, Token, UserRepository},
+    ports::{IAuthService, Token, UserRepository},
 };
-use crate::{AppError, Result};
+use crate::Result;
 pub struct AuthService<T> {
     pub repository: T,
     pub application_key: AppKey,
@@ -39,12 +41,16 @@ where
             &self.application_key.encoding,
         )?))
     }
-    async fn login_credential(&self, credential: &Credential) -> Result<Token> {
+    async fn login_credential(&self, credential: &ClearCredential) -> Result<Token> {
+        let user_email =
+            EmailAddress::new(credential.email.clone()).expect("error management really needed");
         let user_id = self
             .repository
-            .check_existing_user_email(&credential.email)
+            .check_existing_user_email(&user_email)
             .await?;
-        if self.repository.validate_password(&credential).await {
+        let user_hash = self.repository.hash(&user_email).await?;
+        let password_valid = argon2::verify_encoded(&user_hash, &credential.password.as_bytes())?;
+        if password_valid {
             let claims = Claims::new(user_id);
             Ok(Token(encode(
                 &Header::default(),
@@ -52,9 +58,7 @@ where
                 &self.application_key.encoding,
             )?))
         } else {
-            Err(AppError::PermissionDenied(
-                "Wrong email/password combination".to_owned(),
-            ))
+            Err(AuthError::Password(PasswordError::InvalidPassword))?
         }
     }
 
@@ -109,17 +113,15 @@ where
             let kid = Kid::new(
                 header
                     .kid
-                    .ok_or_else(|| AppError::TokenError("Missing key identifier".to_owned()))?,
+                    .ok_or_else(|| AuthError::Kid(KidError::InvalidKid))?,
             )
-            .map_err(|_| AppError::TokenError("Key identifier too long".to_owned()))?;
+            .map_err(|_| AuthError::Kid(KidError::InvalidKid))?;
             let decoding_key = &key_set.keys[&kid];
             let provider_claims =
                 decode::<ProviderClaims>(&token.0, decoding_key, &Validation::default())?.claims;
             match provider_claims.iss.as_ref() {
                 "accounts.google.com" | "https://accounts.google.com" => Ok(provider_claims),
-                _ => Err(AppError::PermissionDenied(
-                    "Malicious user detected".to_owned(),
-                )),
+                _ => Err(AuthError::Token)?,
             }
         }
     }

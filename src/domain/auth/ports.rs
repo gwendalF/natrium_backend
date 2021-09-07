@@ -2,14 +2,13 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
-use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
+use jsonwebtoken::DecodingKey;
 
-use super::{
-    auth_types::{
-        credential::Credential, email::EmailAddress, key_identifier::Kid, password::Password,
-        provider::AuthProvider, salt::Salt,
-    },
-    jwt_authentication::Claims,
+use super::auth_types::{
+    credential::{ClearCredential, Credential},
+    email::EmailAddress,
+    key_identifier::Kid,
+    provider::AuthProvider,
 };
 use crate::Result;
 
@@ -19,7 +18,7 @@ pub struct Token(pub String);
 pub trait IAuthService {
     async fn login_provider(&self, provider_token: &Token, provider: AuthProvider)
         -> Result<Token>;
-    async fn login_credential(&self, credential: &Credential) -> Result<Token>;
+    async fn login_credential(&self, credential: &ClearCredential) -> Result<Token>;
     async fn register_credential(&self, credential: &Credential) -> Result<Token>;
     async fn register_provider(
         &self,
@@ -28,6 +27,7 @@ pub trait IAuthService {
     ) -> Result<Token>;
 }
 
+#[derive(Debug, Clone)]
 pub struct ProviderKeySet {
     pub keys: HashMap<Kid, DecodingKey<'static>>,
     pub expiration: NaiveDateTime,
@@ -38,7 +38,7 @@ pub trait UserRepository {
     async fn update_key_set(&self, provider_key_set: &mut ProviderKeySet) -> Result<()>;
     async fn check_existing_user_provider(&self, provider_subject: &str) -> Result<i32>;
     async fn check_existing_user_email(&self, email: &EmailAddress) -> Result<i32>;
-    async fn validate_password(&self, credential: &Credential) -> bool;
+    async fn hash(&self, email: &EmailAddress) -> Result<String>;
     async fn create_user_subject(
         &self,
         provider_subject: &str,

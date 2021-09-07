@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 
-use crate::domain::auth::auth_types::credential::Credential;
+use crate::domain::auth::auth_types::credential::{Credential, CredentialError};
 use crate::domain::auth::auth_types::key_identifier::Kid;
-use crate::domain::auth::auth_types::password::Password;
-use crate::domain::auth::auth_types::provider::AuthProvider;
-use crate::domain::auth::auth_types::salt::Salt;
-use crate::domain::auth::ports::{ProviderKeySet, Token, UserRepository};
 
-use crate::domain::auth::auth_types::email::EmailAddress;
+use crate::domain::auth::auth_types::password::PasswordError;
+use crate::domain::auth::errors::AuthError;
+use crate::domain::auth::ports::{ProviderKeySet, UserRepository};
+
+use crate::domain::auth::auth_types::email::{EmailAddress, EmailError};
 use crate::{AppError, Result};
 use async_trait::async_trait;
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::NaiveDateTime;
 use jsonwebtoken::DecodingKey;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -93,7 +93,7 @@ impl UserRepository for UserRepositoryImpl {
         {
             Ok(record.id)
         } else {
-            Err(AppError::UserNotFoundEror)
+            Err(AuthError::Email(EmailError::InvalidEmail))?
         }
     }
 
@@ -114,9 +114,7 @@ impl UserRepository for UserRepositoryImpl {
         {
             Ok(user_id.id)
         } else {
-            Err(AppError::PermissionDenied(
-                "Need to manage errors properly".to_owned(),
-            ))
+            Err(AuthError::Email(EmailError::AlreadyUsedEmail))?
         }
     }
 
@@ -137,19 +135,17 @@ impl UserRepository for UserRepositoryImpl {
         .fetch_one(&self.repo)
         .await?
         .id;
-        let provider_user_mapper_id: i32 = sqlx::query!(
+        sqlx::query!(
             r#"
             INSERT INTO provider_user_mapper (name, subject, user_id)
             VALUES ('google', $1, $2)
             ON CONFLICT DO NOTHING
-            RETURNING id
         "#,
             provider_subject,
             user_id
         )
         .fetch_one(&self.repo)
-        .await?
-        .id;
+        .await?;
         Ok(user_id)
     }
 
@@ -165,7 +161,25 @@ impl UserRepository for UserRepositoryImpl {
         .await?
         .id)
     }
-    async fn validate_password(&self, credential: &Credential) -> bool {
-        todo!()
+
+    async fn hash(&self, email: &EmailAddress) -> Result<String> {
+        if let Some(user_hash_record) = sqlx::query!(
+            r#"
+            SELECT password FROM user_account 
+            WHERE email=$1
+        "#,
+            email.value()
+        )
+        .fetch_optional(&self.repo)
+        .await?
+        {
+            if let Some(hash) = user_hash_record.password {
+                Ok(hash)
+            } else {
+                Err(AuthError::Password(PasswordError::PasswordNotFound))?
+            }
+        } else {
+            Err(AuthError::Password(PasswordError::PasswordNotFound))?
+        }
     }
 }
