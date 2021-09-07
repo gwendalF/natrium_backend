@@ -1,8 +1,5 @@
-use std::sync::Mutex;
-
-use crate::domain::auth::ports::ProviderKeySet;
-
+#[derive(Debug, Clone, Copy)]
 pub enum AuthProvider {
-    Google(Mutex<ProviderKeySet>),
+    Google,
     Facebook,
 }

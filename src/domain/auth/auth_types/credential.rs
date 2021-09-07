@@ -6,6 +6,7 @@ use super::{
 use serde::Deserialize;
 use thiserror::Error;
 
+#[derive(Deserialize)]
 pub struct Credential {
     pub email: EmailAddress,
     pub hash: Password,

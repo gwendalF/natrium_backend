@@ -1,3 +1,5 @@
+use std::sync::Mutex;
+
 use async_trait::async_trait;
 use jsonwebtoken::{decode, decode_header, encode, Header, Validation};
 
@@ -11,7 +13,7 @@ use crate::domain::auth::{
     },
     errors::AuthError,
     jwt_authentication::{AppKey, Claims, ProviderClaims},
-    ports::{IAuthService, Token, UserRepository},
+    ports::{IAuthService, ProviderKeySet, Token, UserRepository},
 };
 use crate::Result;
 pub struct AuthService<T> {
@@ -28,8 +30,10 @@ where
         &self,
         provider_token: &Token,
         provider: &AuthProvider,
+        key_set: &Mutex<ProviderKeySet>,
     ) -> Result<Token> {
-        let provider_claims = decode_provider(provider, provider_token, &self.repository).await?;
+        let provider_claims =
+            decode_provider(provider, provider_token, &self.repository, key_set).await?;
         let user_id = self
             .repository
             .check_existing_user_provider(&provider_claims.sub)
@@ -78,8 +82,9 @@ where
         &self,
         provider_token: &Token,
         provider: &AuthProvider,
+        key_set: &Mutex<ProviderKeySet>,
     ) -> Result<Token> {
-        let claims = decode_provider(provider, provider_token, &self.repository).await?;
+        let claims = decode_provider(provider, provider_token, &self.repository, key_set).await?;
         let user_id = self
             .repository
             .create_user_subject(
@@ -100,6 +105,7 @@ async fn decode_provider<T>(
     provider: &AuthProvider,
     token: &Token,
     repository: &T,
+    key_set: &Mutex<ProviderKeySet>,
 ) -> Result<ProviderClaims>
 where
     T: UserRepository + Sync + Send,
@@ -107,10 +113,15 @@ where
     let header = decode_header(&token.0)?;
     match provider {
         AuthProvider::Facebook => unimplemented!(),
-        AuthProvider::Google(key_set) => {
-            let mut key_set = key_set.lock().expect("Mutex lock error");
-            if key_set.expiration <= chrono::Utc::now().naive_utc() {
-                repository.update_key_set(&mut key_set).await?;
+        AuthProvider::Google => {
+            let expiration;
+            {
+                let key_set_guard = key_set.lock().expect("Lock error");
+                expiration = key_set_guard.expiration;
+            }
+
+            if expiration <= chrono::Utc::now().naive_utc() {
+                repository.update_key_set(key_set).await?;
             }
             let kid = Kid::new(
                 header
@@ -118,6 +129,7 @@ where
                     .ok_or_else(|| AuthError::Kid(KidError::InvalidKid))?,
             )
             .map_err(|_| AuthError::Kid(KidError::InvalidKid))?;
+            let key_set = key_set.lock().expect("Lock error");
             let decoding_key = &key_set.keys[&kid];
             let provider_claims =
                 decode::<ProviderClaims>(&token.0, decoding_key, &Validation::default())?.claims;

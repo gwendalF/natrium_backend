@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::sync::Mutex;
 
-use crate::domain::auth::auth_types::credential::{Credential, CredentialError};
+use crate::domain::auth::auth_types::credential::Credential;
 use crate::domain::auth::auth_types::key_identifier::Kid;
 
 use crate::domain::auth::auth_types::password::PasswordError;
@@ -23,7 +24,7 @@ pub struct UserRepositoryImpl {
 
 #[async_trait]
 impl UserRepository for UserRepositoryImpl {
-    async fn update_key_set(&self, provider_key_set: &mut ProviderKeySet) -> Result<()> {
+    async fn update_key_set(&self, provider_key_set: &Mutex<ProviderKeySet>) -> Result<()> {
         lazy_static! {
             static ref RE: Regex = Regex::new("max-age=([0-9]+)").unwrap();
         }
@@ -75,7 +76,8 @@ impl UserRepository for UserRepositoryImpl {
             keys: new_keys,
             expiration,
         };
-        *provider_key_set = provider_key;
+        let mut key_set = provider_key_set.lock().expect("Lock error");
+        // *key_set = &provider_key;
         Ok(())
     }
 

@@ -65,15 +65,19 @@ pub async fn validator(
     req: ServiceRequest,
     credentials: BearerAuth,
 ) -> Result<ServiceRequest, actix_web::Error> {
-    if let Some(decoding_key) = req.app_data::<web::Data<DecodingKey>>() {
-        match decode::<Claims>(credentials.token(), decoding_key, &Validation::default()) {
+    if let Some(app_key) = req.app_data::<web::Data<AppKey>>() {
+        match decode::<Claims>(
+            credentials.token(),
+            &app_key.decoding,
+            &Validation::default(),
+        ) {
             Ok(token) => {
                 if let Some(perm) = token.claims.permissions {
                     req.attach(perm);
                 }
                 Ok(req)
             }
-            Err(e) => Err(AppError::AuthenticationError(AuthError::Token))?,
+            Err(_) => Err(AppError::AuthenticationError(AuthError::Token))?,
         }
     } else {
         Err(AppError::ServerError)?

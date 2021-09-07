@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
 use regex::Regex;
+use serde::Deserialize;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -9,6 +10,8 @@ pub enum EmailError {
     #[error("Email already exist")]
     AlreadyUsedEmail,
 }
+
+#[derive(Deserialize)]
 pub struct EmailAddress(String);
 
 fn validate(email: String) -> Result<String, EmailError> {
