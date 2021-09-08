@@ -1,16 +1,31 @@
+use std::convert::TryFrom;
+
+use crate::domain::auth::errors::AuthError;
+
 use super::{
     email::{EmailAddress, EmailError},
     password::{Password, PasswordError},
     salt::Salt,
 };
+use argon2::Config;
+use rand::{distributions::Alphanumeric, Rng};
 use serde::Deserialize;
 use thiserror::Error;
 
-#[derive(Deserialize)]
 pub struct Credential {
     pub email: EmailAddress,
     pub hash: Password,
     pub salt: Salt,
+}
+
+impl TryFrom<ClearCredential> for Credential {
+    type Error = AuthError;
+    fn try_from(value: ClearCredential) -> Result<Self, Self::Error> {
+        let salt = Salt::new();
+        let hash = Password::new(value.password, &salt)?;
+        let email = EmailAddress::new(value.email)?;
+        Ok(Credential { salt, hash, email })
+    }
 }
 
 #[derive(Error, Debug)]

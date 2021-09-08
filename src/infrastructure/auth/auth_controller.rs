@@ -1,10 +1,11 @@
-use std::sync::Mutex;
-
 use crate::domain::auth::auth_types::credential::{ClearCredential, Credential};
 use crate::domain::auth::auth_types::provider::AuthProvider;
 use crate::domain::auth::ports::{IAuthService, ProviderKeySet, Token};
 use crate::Result;
-use actix_web::{post, web, HttpResponse};
+use actix_web::{error, web, HttpResponse};
+use actix_web_httpauth::extractors::bearer::BearerAuth;
+use std::convert::TryFrom;
+use std::sync::Mutex;
 
 pub fn configure<T: 'static + IAuthService>(service: web::Data<T>, cfg: &mut web::ServiceConfig) {
     cfg.app_data(service);
@@ -15,13 +16,23 @@ pub fn configure<T: 'static + IAuthService>(service: web::Data<T>, cfg: &mut web
     cfg.route("/register_google/", web::post().to(register_provider::<T>));
     cfg.route("/login/", web::post().to(login_credential::<T>));
     cfg.route("/login_google/", web::post().to(login_provider::<T>));
+    cfg.app_data(web::JsonConfig::default().error_handler(|err, _req| {
+        error::InternalError::from_response(
+            "Invalid json",
+            HttpResponse::BadRequest()
+                .content_type("application/json")
+                .body(format!(r#"{{"error":"{}"#, err)),
+        )
+        .into()
+    }));
 }
 
 async fn register_credential<T: IAuthService>(
     service: web::Data<T>,
-    web::Json(body): web::Json<Credential>,
+    web::Json(body): web::Json<ClearCredential>,
 ) -> Result<web::Json<String>> {
-    Ok(web::Json(service.register_credential(&body).await?.0))
+    let credential = Credential::try_from(body)?;
+    Ok(web::Json(service.register_credential(&credential).await?.0))
 }
 
 async fn login_credential<T: IAuthService>(
@@ -33,10 +44,10 @@ async fn login_credential<T: IAuthService>(
 
 async fn register_provider<T: IAuthService>(
     service: web::Data<T>,
-    web::Json(body): web::Json<String>,
+    token: BearerAuth,
     key_set: web::Data<Mutex<ProviderKeySet>>,
 ) -> Result<web::Json<String>> {
-    let token = Token(body);
+    let token = Token(token.token().to_owned());
     Ok(web::Json(
         service
             .register_provider(&token, &AuthProvider::Google, &key_set)
@@ -47,10 +58,10 @@ async fn register_provider<T: IAuthService>(
 
 async fn login_provider<T: IAuthService>(
     service: web::Data<T>,
-    web::Json(body): web::Json<String>,
+    token: BearerAuth,
     key_set: web::Data<Mutex<ProviderKeySet>>,
 ) -> Result<web::Json<String>> {
-    let token = Token(body);
+    let token = Token(token.token().to_owned());
     Ok(web::Json(
         service
             .login_provider(&token, &AuthProvider::Google, &key_set)

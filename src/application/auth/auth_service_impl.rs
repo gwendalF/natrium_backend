@@ -16,6 +16,8 @@ use crate::domain::auth::{
     ports::{IAuthService, ProviderKeySet, Token, UserRepository},
 };
 use crate::Result;
+
+#[derive(Clone)]
 pub struct AuthService<T> {
     pub repository: T,
     pub application_key: AppKey,
@@ -85,6 +87,7 @@ where
         key_set: &Mutex<ProviderKeySet>,
     ) -> Result<Token> {
         let claims = decode_provider(provider, provider_token, &self.repository, key_set).await?;
+        println!("{:?}", claims);
         let user_id = self
             .repository
             .create_user_subject(
@@ -111,6 +114,7 @@ where
     T: UserRepository + Sync + Send,
 {
     let header = decode_header(&token.0)?;
+    println!("header decoded: {:?}", header);
     match provider {
         AuthProvider::Facebook => unimplemented!(),
         AuthProvider::Google => {
@@ -131,8 +135,15 @@ where
             .map_err(|_| AuthError::Kid(KidError::InvalidKid))?;
             let key_set = key_set.lock().expect("Lock error");
             let decoding_key = &key_set.keys[&kid];
-            let provider_claims =
-                decode::<ProviderClaims>(&token.0, decoding_key, &Validation::default())?.claims;
+            let provider_claims = decode::<ProviderClaims>(
+                &token.0,
+                decoding_key,
+                &Validation {
+                    algorithms: vec![jsonwebtoken::Algorithm::RS256],
+                    ..Default::default()
+                },
+            )?
+            .claims;
             match provider_claims.iss.as_ref() {
                 "accounts.google.com" | "https://accounts.google.com" => Ok(provider_claims),
                 _ => Err(AuthError::Token)?,

@@ -12,6 +12,7 @@ use super::auth_types::{
 };
 use crate::Result;
 
+#[derive(Debug)]
 pub struct Token(pub String);
 
 #[async_trait]

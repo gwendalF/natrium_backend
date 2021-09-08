@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::domain::auth::auth_types::credential::Credential;
 use crate::domain::auth::auth_types::key_identifier::Kid;
@@ -125,6 +125,8 @@ impl UserRepository for UserRepositoryImpl {
         provider_subject: &str,
         provider_email: &EmailAddress,
     ) -> Result<i32> {
+        println!("Before insert");
+        println!("parameters: \nemail: {:?}", provider_email.value());
         let user_id: i32 = sqlx::query!(
             r#"
             INSERT INTO user_account (email) 
@@ -137,6 +139,7 @@ impl UserRepository for UserRepositoryImpl {
         .fetch_one(&self.repo)
         .await?
         .id;
+        println!("Inser done");
         sqlx::query!(
             r#"
             INSERT INTO provider_user_mapper (name, subject, user_id)

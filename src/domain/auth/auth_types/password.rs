@@ -31,7 +31,7 @@ fn validate_hash(hash: String) -> Result<String, PasswordError> {
 }
 
 impl Password {
-    pub fn new(password: String, salt: Salt) -> Result<Password, PasswordError> {
+    pub fn new(password: String, salt: &Salt) -> Result<Password, PasswordError> {
         match validate(password) {
             Ok(pwd) => {
                 let hash = argon2::hash_encoded(
