@@ -5,10 +5,7 @@ use reqwest::header::ToStrError;
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::domain::auth::{
-    auth_types::key_identifier::{Kid, KidError},
-    errors::AuthError,
-};
+use crate::domain::auth::{auth_types::key_identifier::KidError, errors::AuthError};
 pub type Result<T> = std::result::Result<T, AppError>;
 
 #[derive(Error, Debug)]
@@ -106,7 +103,7 @@ impl From<ToStrError> for AppError {
 }
 
 impl From<jsonwebtoken::errors::Error> for AppError {
-    fn from(e: jsonwebtoken::errors::Error) -> Self {
+    fn from(_: jsonwebtoken::errors::Error) -> Self {
         AppError::AuthenticationError(AuthError::Token)
     }
 }

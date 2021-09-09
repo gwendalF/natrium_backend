@@ -1,9 +1,9 @@
 use crate::config::Config;
 use crate::domain::auth::jwt_authentication;
-use actix_web::{error, middleware, web, App, HttpResponse, HttpServer};
-use actix_web_httpauth::middleware::HttpAuthentication;
+use actix_web::{middleware, web, App, HttpServer};
 use application::auth::auth_service_impl::AuthService;
 use domain::auth::auth_types::key_identifier::Kid;
+use domain::auth::auth_types::provider::AuthProvider;
 use domain::auth::ports::ProviderKeySet;
 use domain::AppError;
 use domain::Result;
@@ -11,7 +11,6 @@ use infrastructure::auth::postgres_repo::UserRepositoryImpl;
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use sqlx::PgPool;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::Mutex;
 
 mod application;
@@ -32,10 +31,10 @@ async fn main() -> Result<()> {
     .await?;
     let expiration = keys_record[0].expiration;
     let key_map: HashMap<Kid, DecodingKey> = keys_record
-        .iter()
+        .into_iter()
         .map(|record| {
             Ok((
-                Kid::new(record.kid.clone())?,
+                Kid::new(record.kid)?,
                 DecodingKey::from_rsa_components(&record.modulus, &record.exponent).into_static(),
             ))
         })
@@ -45,7 +44,7 @@ async fn main() -> Result<()> {
     let jwt_key = jwt_authentication::AppKey { encoding, decoding };
     Ok(HttpServer::new(move || {
         // let auth = HttpAuthentication::bearer(jwt_authentication::validator);
-        let goolge_key_set = Mutex::new(ProviderKeySet {
+        let google_key_set = Mutex::new(ProviderKeySet {
             expiration,
             keys: key_map.clone(),
         });
@@ -60,7 +59,7 @@ async fn main() -> Result<()> {
                 infrastructure::auth::auth_controller::configure(web::Data::new(service), cfg)
             })
             .wrap(middleware::NormalizePath::default())
-            .app_data(web::Data::new(goolge_key_set).clone())
+            .app_data(web::Data::new(google_key_set).clone())
     })
     .bind(format!("{}:{}", config.server.host, config.server.port))?
     .workers(config.workers)

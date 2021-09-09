@@ -1,21 +1,16 @@
 use crate::AppError;
 
-use actix_web::{
-    dev::{Path, ServiceRequest},
-    http::header::CacheDirective,
-    web, FromRequest,
-};
+use actix_web::{dev::ServiceRequest, web};
 use actix_web_grants::permissions::AttachPermissions;
 use actix_web_httpauth::extractors::bearer::BearerAuth;
-use chrono::{Duration, NaiveDateTime, Utc};
+use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
 
 use serde::{Deserialize, Serialize};
 
-use std::collections::HashMap;
 use std::convert::TryFrom;
 
-use super::{auth_types::credential::CredentialError, errors::AuthError};
+use super::errors::AuthError;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {

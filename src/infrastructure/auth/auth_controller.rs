@@ -48,9 +48,10 @@ async fn register_provider<T: IAuthService>(
     key_set: web::Data<Mutex<ProviderKeySet>>,
 ) -> Result<web::Json<String>> {
     let token = Token(token.token().to_owned());
+    let provider = AuthProvider::Google;
     Ok(web::Json(
         service
-            .register_provider(&token, &AuthProvider::Google, &key_set)
+            .register_provider(&token, &provider, key_set.get_ref())
             .await?
             .0,
     ))
@@ -62,9 +63,10 @@ async fn login_provider<T: IAuthService>(
     key_set: web::Data<Mutex<ProviderKeySet>>,
 ) -> Result<web::Json<String>> {
     let token = Token(token.token().to_owned());
+    let provider = AuthProvider::Google;
     Ok(web::Json(
         service
-            .login_provider(&token, &AuthProvider::Google, &key_set)
+            .login_provider(&token, &provider, key_set.get_ref())
             .await?
             .0,
     ))

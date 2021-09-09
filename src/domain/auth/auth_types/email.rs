@@ -1,6 +1,5 @@
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde::Deserialize;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

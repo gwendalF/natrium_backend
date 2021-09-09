@@ -1,14 +1,15 @@
 use std::sync::Mutex;
 
+use actix_web::web;
 use async_trait::async_trait;
 use jsonwebtoken::{decode, decode_header, encode, Header, Validation};
 
 use crate::domain::auth::{
     auth_types::{
-        credential::{ClearCredential, Credential, CredentialError},
+        credential::{ClearCredential, Credential},
         email::EmailAddress,
         key_identifier::{Kid, KidError},
-        password::{Password, PasswordError},
+        password::PasswordError,
         provider::AuthProvider,
     },
     errors::AuthError,
@@ -87,7 +88,6 @@ where
         key_set: &Mutex<ProviderKeySet>,
     ) -> Result<Token> {
         let claims = decode_provider(provider, provider_token, &self.repository, key_set).await?;
-        println!("{:?}", claims);
         let user_id = self
             .repository
             .create_user_subject(
@@ -114,7 +114,6 @@ where
     T: UserRepository + Sync + Send,
 {
     let header = decode_header(&token.0)?;
-    println!("header decoded: {:?}", header);
     match provider {
         AuthProvider::Facebook => unimplemented!(),
         AuthProvider::Google => {
@@ -144,6 +143,7 @@ where
                 },
             )?
             .claims;
+
             match provider_claims.iss.as_ref() {
                 "accounts.google.com" | "https://accounts.google.com" => Ok(provider_claims),
                 _ => Err(AuthError::Token)?,

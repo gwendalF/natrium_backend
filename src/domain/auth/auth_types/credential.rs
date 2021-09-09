@@ -7,8 +7,7 @@ use super::{
     password::{Password, PasswordError},
     salt::Salt,
 };
-use argon2::Config;
-use rand::{distributions::Alphanumeric, Rng};
+
 use serde::Deserialize;
 use thiserror::Error;
 

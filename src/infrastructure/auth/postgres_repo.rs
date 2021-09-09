@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use crate::domain::auth::auth_types::credential::Credential;
 use crate::domain::auth::auth_types::key_identifier::Kid;
@@ -11,7 +11,7 @@ use crate::domain::auth::ports::{ProviderKeySet, UserRepository};
 use crate::domain::auth::auth_types::email::{EmailAddress, EmailError};
 use crate::{AppError, Result};
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{Duration, Utc};
 use jsonwebtoken::DecodingKey;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -41,11 +41,12 @@ impl UserRepository for UserRepositoryImpl {
             .get(1)
             .ok_or_else(|| AppError::ServerError)?
             .as_str();
-        let expiration = NaiveDateTime::from_timestamp(expiration.parse::<i64>()?, 0);
+        let expiration = (Utc::now() + Duration::seconds(expiration.parse::<i64>()?)).naive_utc();
         let new_key_set = response
             .json::<HashMap<String, Vec<HashMap<String, String>>>>()
             .await?;
         let mut new_keys = HashMap::with_capacity(new_key_set["keys"].len());
+        let mut transaction = self.repo.begin().await?;
         for decoding_key in &new_key_set["keys"] {
             sqlx::query!(
                 r#"
@@ -64,7 +65,7 @@ impl UserRepository for UserRepositoryImpl {
                 &decoding_key["e"],
                 &expiration
             )
-            .execute(&self.repo)
+            .execute(&mut transaction)
             .await?;
             let key = DecodingKey::from_rsa_components(&decoding_key["n"], &decoding_key["e"])
                 .into_static();
@@ -72,12 +73,23 @@ impl UserRepository for UserRepositoryImpl {
                 Kid::new(decoding_key["kid"].to_owned()).expect("Manage different error type");
             new_keys.insert(kid, key);
         }
+        sqlx::query!(
+            r#"
+            DELETE FROM token_key WHERE expiration < NOW()
+        "#
+        )
+        .execute(&mut transaction)
+        .await?;
+
         let provider_key = ProviderKeySet {
             keys: new_keys,
             expiration,
         };
-        let mut key_set = provider_key_set.lock().expect("Lock error");
-        // *key_set = &provider_key;
+        {
+            let mut key_set = provider_key_set.lock().expect("Lock error");
+            *key_set = provider_key;
+        }
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -125,32 +137,30 @@ impl UserRepository for UserRepositoryImpl {
         provider_subject: &str,
         provider_email: &EmailAddress,
     ) -> Result<i32> {
-        println!("Before insert");
-        println!("parameters: \nemail: {:?}", provider_email.value());
-        let user_id: i32 = sqlx::query!(
+        let mut transaction = self.repo.begin().await?;
+        let user_id = sqlx::query!(
             r#"
-            INSERT INTO user_account (email) 
+            INSERT INTO user_account (email)
             VALUES ($1)
             ON CONFLICT DO NOTHING
             RETURNING id
         "#,
-            &provider_email.value()
+            &provider_email.value(),
         )
-        .fetch_one(&self.repo)
+        .fetch_one(&mut transaction)
         .await?
         .id;
-        println!("Inser done");
         sqlx::query!(
             r#"
             INSERT INTO provider_user_mapper (name, subject, user_id)
-            VALUES ('google', $1, $2)
-            ON CONFLICT DO NOTHING
+            VALUES ('google', $1, $2)           
         "#,
             provider_subject,
             user_id
         )
-        .fetch_one(&self.repo)
+        .execute(&mut transaction)
         .await?;
+        transaction.commit().await?;
         Ok(user_id)
     }
 

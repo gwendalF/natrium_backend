@@ -3,7 +3,7 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS token_key (
     id SMALLSERIAL PRIMARY KEY,
     kid TEXT UNIQUE NOT NULL,
-    provider VARCHAR(10) NOT NULL,
+    provider VARCHAR(10) NOT NULL CHECK(provider IN ('google', 'facebook')),
     modulus TEXT NOT NULL,
     exponent VARCHAR(10) NOT NULL,
     expiration TIMESTAMP NOT NULL
