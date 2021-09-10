@@ -36,11 +36,8 @@ impl UserRepository for UserRepositoryImpl {
                     .to_str()
                     .expect("Google key header cache-control cannot be used as str"),
             )
-            .ok_or_else(|| AppError::ServerError)?;
-        let expiration = capture
-            .get(1)
-            .ok_or_else(|| AppError::ServerError)?
-            .as_str();
+            .ok_or(AppError::ServerError)?;
+        let expiration = capture.get(1).ok_or(AppError::ServerError)?.as_str();
         let expiration = (Utc::now() + Duration::seconds(expiration.parse::<i64>()?)).naive_utc();
         let new_key_set = response
             .json::<HashMap<String, Vec<HashMap<String, String>>>>()
@@ -50,20 +47,22 @@ impl UserRepository for UserRepositoryImpl {
         for decoding_key in &new_key_set["keys"] {
             sqlx::query!(
                 r#"
-                INSERT INTO token_key(kid, provider, modulus, exponent, expiration)
-                VALUES ($1, 'google', $2, $3, $4)
+                INSERT INTO token_key(kid, provider, modulus, exponent, expiration, created_at, updated_at)
+                VALUES ($1, 'google', $2, $3, $4, $5, $5)
                 ON CONFLICT (kid) DO UPDATE 
                 SET
                     kid = $1,
                     modulus = $2,
                     exponent = $3,
-                    expiration = $4
+                    expiration = $4,
+                    updated_at = $5
                     WHERE token_key.kid = $1
             "#,
                 &decoding_key["kid"],
                 &decoding_key["n"],
                 &decoding_key["e"],
-                &expiration
+                &expiration,
+                chrono::Utc::now().naive_utc()
             )
             .execute(&mut transaction)
             .await?;
@@ -107,28 +106,29 @@ impl UserRepository for UserRepositoryImpl {
         {
             Ok(record.id)
         } else {
-            Err(AuthError::Email(EmailError::InvalidEmail))?
+            Err(AuthError::Email(EmailError::InvalidEmail).into())
         }
     }
 
     async fn create_user_credential(&self, credential: &Credential) -> Result<i32> {
         if let Some(user_id) = sqlx::query!(
             r#"
-            INSERT INTO user_account (email, password, salt)
-            VALUES ($1, $2, $3)
+            INSERT INTO user_account (email, password, salt, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $4)
             ON CONFLICT DO NOTHING
             RETURNING id
         "#,
             &credential.email.value(),
             &credential.hash.value(),
-            &credential.salt.value()
+            &credential.salt.value(),
+            chrono::Utc::now().naive_utc()
         )
         .fetch_optional(&self.repo)
         .await?
         {
             Ok(user_id.id)
         } else {
-            Err(AuthError::Email(EmailError::AlreadyUsedEmail))?
+            Err(AuthError::Email(EmailError::AlreadyUsedEmail).into())
         }
     }
 
@@ -140,12 +140,13 @@ impl UserRepository for UserRepositoryImpl {
         let mut transaction = self.repo.begin().await?;
         let user_id = sqlx::query!(
             r#"
-            INSERT INTO user_account (email)
-            VALUES ($1)
+            INSERT INTO user_account (email, created_at, updated_at)
+            VALUES ($1, $2, $2)
             ON CONFLICT DO NOTHING
             RETURNING id
         "#,
             &provider_email.value(),
+            chrono::Utc::now().naive_utc()
         )
         .fetch_one(&mut transaction)
         .await?
@@ -191,10 +192,10 @@ impl UserRepository for UserRepositoryImpl {
             if let Some(hash) = user_hash_record.password {
                 Ok(hash)
             } else {
-                Err(AuthError::Password(PasswordError::PasswordNotFound))?
+                Err(AuthError::Password(PasswordError::PasswordNotFound).into())
             }
         } else {
-            Err(AuthError::Password(PasswordError::PasswordNotFound))?
+            Err(AuthError::Password(PasswordError::PasswordNotFound).into())
         }
     }
 }

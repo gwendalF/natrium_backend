@@ -1,6 +1,5 @@
 use std::sync::Mutex;
 
-use actix_web::web;
 use async_trait::async_trait;
 use jsonwebtoken::{decode, decode_header, encode, Header, Validation};
 
@@ -66,7 +65,7 @@ where
                 &self.application_key.encoding,
             )?))
         } else {
-            Err(AuthError::Password(PasswordError::InvalidPassword))?
+            Err(AuthError::Password(PasswordError::InvalidPassword).into())
         }
     }
 
@@ -126,12 +125,8 @@ where
             if expiration <= chrono::Utc::now().naive_utc() {
                 repository.update_key_set(key_set).await?;
             }
-            let kid = Kid::new(
-                header
-                    .kid
-                    .ok_or_else(|| AuthError::Kid(KidError::InvalidKid))?,
-            )
-            .map_err(|_| AuthError::Kid(KidError::InvalidKid))?;
+            let kid = Kid::new(header.kid.ok_or(AuthError::Kid(KidError::InvalidKid))?)
+                .map_err(|_| AuthError::Kid(KidError::InvalidKid))?;
             let key_set = key_set.lock().expect("Lock error");
             let decoding_key = &key_set.keys[&kid];
             let provider_claims = decode::<ProviderClaims>(
@@ -146,7 +141,7 @@ where
 
             match provider_claims.iss.as_ref() {
                 "accounts.google.com" | "https://accounts.google.com" => Ok(provider_claims),
-                _ => Err(AuthError::Token)?,
+                _ => Err(AuthError::Token.into()),
             }
         }
     }

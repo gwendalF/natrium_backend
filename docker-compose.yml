@@ -1,12 +1,13 @@
 version: "3"
 services:
-  postgres:
-    image: postgres:13-alpine
+  timescaledb:
+    image: timescale/timescaledb:latest-pg12
     restart: always
     environment:
-      POSTGRES_PASSWORD: natrium
-      POSTGRES_USER: natrium
-      POSTGRES_DB: natrium
+      POSTGRES_PASSWORD: timescale
+      POSTGRES_USER: timescale
+      POSTGRES_DB: timescale
     ports:
       - 5432:5432
+
     

@@ -9,6 +9,16 @@
             "database": "natrium",
             "username": "natrium",
             "password": "natrium"
+        },
+        {
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "timescale",
+            "database": "timescale",
+            "username": "timescale",
+            "password": "timescale"
         }
     ],
     "rust-analyzer.inlayHints.enable": true,

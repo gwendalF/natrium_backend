@@ -23,7 +23,7 @@ impl TryFrom<ClearCredential> for Credential {
         let salt = Salt::new();
         let hash = Password::new(value.password, &salt)?;
         let email = EmailAddress::new(value.email)?;
-        Ok(Credential { salt, hash, email })
+        Ok(Credential { email, hash, salt })
     }
 }
 

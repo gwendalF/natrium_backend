@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use rand::Rng;
 use thiserror::Error;
 pub struct Salt(String);
@@ -28,5 +30,13 @@ impl Salt {
 
     pub fn value(&self) -> &str {
         &self.0
+    }
+}
+
+impl TryFrom<String> for Salt {
+    type Error = SaltError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let salt = validate(value)?;
+        Ok(Salt(salt))
     }
 }

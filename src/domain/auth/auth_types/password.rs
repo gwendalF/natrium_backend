@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use argon2::Config;
 use thiserror::Error;
 
@@ -48,5 +50,20 @@ impl Password {
 
     pub fn value(&self) -> &str {
         &self.0
+    }
+}
+
+impl TryFrom<String> for Password {
+    type Error = PasswordError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let value = validate_hash(value)?;
+        Ok(Password(value))
+    }
+}
+
+impl TryFrom<&str> for Password {
+    type Error = PasswordError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(Password(validate_hash(value.to_owned())?))
     }
 }

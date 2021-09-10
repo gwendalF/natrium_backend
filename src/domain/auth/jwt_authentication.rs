@@ -72,9 +72,9 @@ pub async fn validator(
                 }
                 Ok(req)
             }
-            Err(_) => Err(AppError::AuthenticationError(AuthError::Token))?,
+            Err(_) => Err(AppError::AuthenticationError(AuthError::Token).into()),
         }
     } else {
-        Err(AppError::ServerError)?
+        Err(AppError::ServerError.into())
     }
 }

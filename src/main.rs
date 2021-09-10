@@ -3,7 +3,6 @@ use crate::domain::auth::jwt_authentication;
 use actix_web::{middleware, web, App, HttpServer};
 use application::auth::auth_service_impl::AuthService;
 use domain::auth::auth_types::key_identifier::Kid;
-use domain::auth::auth_types::provider::AuthProvider;
 use domain::auth::ports::ProviderKeySet;
 use domain::AppError;
 use domain::Result;
@@ -59,7 +58,7 @@ async fn main() -> Result<()> {
                 infrastructure::auth::auth_controller::configure(web::Data::new(service), cfg)
             })
             .wrap(middleware::NormalizePath::default())
-            .app_data(web::Data::new(google_key_set).clone())
+            .app_data(web::Data::new(google_key_set))
     })
     .bind(format!("{}:{}", config.server.host, config.server.port))?
     .workers(config.workers)

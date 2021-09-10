@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Mutex};
 
-use actix_web::web;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use jsonwebtoken::DecodingKey;
