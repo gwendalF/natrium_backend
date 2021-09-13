@@ -92,7 +92,7 @@ impl UserRepository for UserRepositoryImpl {
         Ok(())
     }
 
-    async fn check_existing_user_provider(&self, provider_subject: &str) -> Result<i32> {
+    async fn check_existing_user_subject(&self, provider_subject: &str) -> Result<i32> {
         if let Some(record) = sqlx::query!(
             r#"
         SELECT user_account.id from user_account JOIN provider_user_mapper

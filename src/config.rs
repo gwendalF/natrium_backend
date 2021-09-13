@@ -9,6 +9,7 @@ pub struct ServerConfig {
 #[derive(Deserialize, Clone)]
 pub struct Key {
     pub key: String,
+    pub refresh_key: String,
 }
 
 #[derive(Deserialize, Clone)]

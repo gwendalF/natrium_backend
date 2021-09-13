@@ -19,4 +19,6 @@ pub enum AuthError {
     Salt(#[from] SaltError),
     #[error("Token error")]
     Token,
+    #[error("Expired token")]
+    ExpiredToken,
 }

@@ -4,7 +4,7 @@ use actix_web::{dev::ServiceRequest, web};
 use actix_web_grants::permissions::AttachPermissions;
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
+use jsonwebtoken::{decode, errors::ErrorKind, DecodingKey, EncodingKey, Validation};
 
 use serde::{Deserialize, Serialize};
 
@@ -31,10 +31,28 @@ pub struct ProviderClaims {
     pub email_verified: bool,
 }
 
+pub enum TokenType {
+    RefreshToken,
+    AccessToken,
+}
+
 impl Claims {
-    pub fn new(id: i32) -> Self {
-        let exp = usize::try_from((Utc::now() + Duration::hours(1)).timestamp()).unwrap();
-        let permissions = Some(vec![format!("READ_{}", id)]);
+    pub fn new(id: i32, token_type: TokenType) -> Self {
+        let exp;
+        let permissions;
+        match token_type {
+            TokenType::AccessToken => {
+                exp = usize::try_from((Utc::now() + Duration::minutes(10)).timestamp()).unwrap();
+                permissions = Some(vec![format!("READ_{}", id)]);
+            }
+
+            TokenType::RefreshToken => {
+                // exp = usize::try_from((Utc::now() + Duration::days(7)).timestamp()).unwrap();
+                exp = usize::try_from((Utc::now() + Duration::hours(1)).timestamp()).unwrap();
+                println!("Wrong duration for refresh token");
+                permissions = Some(vec![format!("ACCESS_TOKEN_{}", id)]);
+            }
+        }
         Claims {
             aud: "natrium".to_owned(),
             sub: id.to_string(),
@@ -45,13 +63,14 @@ impl Claims {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct TokenResponse {
-    pub token: String,
+#[derive(Debug, Clone)]
+pub struct AppKey {
+    pub encoding: EncodingKey,
+    pub decoding: DecodingKey<'static>,
 }
 
 #[derive(Debug, Clone)]
-pub struct AppKey {
+pub struct RefreshKey {
     pub encoding: EncodingKey,
     pub decoding: DecodingKey<'static>,
 }
@@ -61,18 +80,22 @@ pub async fn validator(
     credentials: BearerAuth,
 ) -> Result<ServiceRequest, actix_web::Error> {
     if let Some(app_key) = req.app_data::<web::Data<AppKey>>() {
-        match decode::<Claims>(
-            credentials.token(),
-            &app_key.decoding,
-            &Validation::default(),
-        ) {
+        let mut validation = Validation {
+            iss: Some("natrium".to_owned()),
+            ..Validation::default()
+        };
+        validation.set_audience(&["natrium"]);
+        match decode::<Claims>(credentials.token(), &app_key.decoding, &validation) {
             Ok(token) => {
                 if let Some(perm) = token.claims.permissions {
                     req.attach(perm);
                 }
                 Ok(req)
             }
-            Err(_) => Err(AppError::AuthenticationError(AuthError::Token).into()),
+            Err(e) => match e.kind() {
+                ErrorKind::ExpiredSignature => Err(AppError::from(AuthError::ExpiredToken).into()),
+                _ => Err(AppError::from(AuthError::Token).into()),
+            },
         }
     } else {
         Err(AppError::ServerError.into())

@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use jsonwebtoken::{decode, decode_header, encode, Header, Validation};
+use jsonwebtoken::{decode, decode_header, Validation};
 
 use crate::domain::auth::{
     auth_types::{
@@ -12,8 +12,8 @@ use crate::domain::auth::{
         provider::AuthProvider,
     },
     errors::AuthError,
-    jwt_authentication::{AppKey, Claims, ProviderClaims},
-    ports::{IAuthService, ProviderKeySet, Token, UserRepository},
+    jwt_authentication::{AppKey, Claims, ProviderClaims, RefreshKey},
+    ports::{AuthToken, IAuthService, ProviderKeySet, Token, UserRepository},
 };
 use crate::Result;
 
@@ -21,6 +21,7 @@ use crate::Result;
 pub struct AuthService<T> {
     pub repository: T,
     pub application_key: AppKey,
+    pub refresh_key: RefreshKey,
 }
 
 #[async_trait]
@@ -33,22 +34,22 @@ where
         provider_token: &Token,
         provider: &AuthProvider,
         key_set: &Mutex<ProviderKeySet>,
-    ) -> Result<Token> {
+    ) -> Result<AuthToken> {
         let provider_claims =
             decode_provider(provider, provider_token, &self.repository, key_set).await?;
         let user_id = self
             .repository
-            .check_existing_user_provider(&provider_claims.sub)
+            .check_existing_user_subject(&provider_claims.sub)
             .await?;
-        let claims = Claims::new(user_id);
-        Ok(Token(encode(
-            &Header::default(),
-            &claims,
+        let token = AuthToken::new(
+            user_id,
             &self.application_key.encoding,
-        )?))
+            &self.refresh_key.encoding,
+        )?;
+        Ok(token)
     }
 
-    async fn login_credential(&self, credential: &ClearCredential) -> Result<Token> {
+    async fn login_credential(&self, credential: &ClearCredential) -> Result<AuthToken> {
         let user_email =
             EmailAddress::new(credential.email.clone()).expect("error management really needed");
         let user_id = self
@@ -58,25 +59,24 @@ where
         let user_hash = self.repository.hash(&user_email).await?;
         let password_valid = argon2::verify_encoded(&user_hash, &credential.password.as_bytes())?;
         if password_valid {
-            let claims = Claims::new(user_id);
-            Ok(Token(encode(
-                &Header::default(),
-                &claims,
+            let token = AuthToken::new(
+                user_id,
                 &self.application_key.encoding,
-            )?))
+                &self.refresh_key.encoding,
+            )?;
+            Ok(token)
         } else {
             Err(AuthError::Password(PasswordError::InvalidPassword).into())
         }
     }
 
-    async fn register_credential(&self, credential: &Credential) -> Result<Token> {
+    async fn register_credential(&self, credential: &Credential) -> Result<AuthToken> {
         let user_id = self.repository.create_user_credential(credential).await?;
-        let claims = Claims::new(user_id);
-        let token = Token(encode(
-            &Header::default(),
-            &claims,
+        let token = AuthToken::new(
+            user_id,
             &self.application_key.encoding,
-        )?);
+            &self.refresh_key.encoding,
+        )?;
         Ok(token)
     }
 
@@ -85,7 +85,7 @@ where
         provider_token: &Token,
         provider: &AuthProvider,
         key_set: &Mutex<ProviderKeySet>,
-    ) -> Result<Token> {
+    ) -> Result<AuthToken> {
         let claims = decode_provider(provider, provider_token, &self.repository, key_set).await?;
         let user_id = self
             .repository
@@ -94,12 +94,35 @@ where
                 &EmailAddress::new(claims.email).expect("Error to be managed"),
             )
             .await?;
-        let claims = Claims::new(user_id);
-        Ok(Token(encode(
-            &Header::default(),
-            &claims,
+        let token = AuthToken::new(
+            user_id,
             &self.application_key.encoding,
-        )?))
+            &self.refresh_key.encoding,
+        )?;
+        Ok(token)
+    }
+
+    async fn refresh_token(&self, refresh_token: &Token) -> Result<AuthToken> {
+        let mut validation = Validation {
+            iss: Some("natrium".to_owned()),
+            ..Validation::default()
+        };
+        validation.set_audience(&["natrium"]);
+        let refresh_claims =
+            decode::<Claims>(&refresh_token.0, &self.refresh_key.decoding, &validation)?.claims;
+        let user_id = self
+            .repository
+            .check_existing_user_subject(&refresh_claims.sub)
+            .await?;
+        if refresh_claims.permissions == Some(vec![format!("ACCESS_TOKEN_{}", user_id)]) {
+            Ok(AuthToken::new(
+                user_id,
+                &self.application_key.encoding,
+                &self.refresh_key.encoding,
+            )?)
+        } else {
+            Err(AuthError::Token.into())
+        }
     }
 }
 
@@ -129,16 +152,12 @@ where
                 .map_err(|_| AuthError::Kid(KidError::InvalidKid))?;
             let key_set = key_set.lock().expect("Lock error");
             let decoding_key = &key_set.keys[&kid];
-            let provider_claims = decode::<ProviderClaims>(
-                &token.0,
-                decoding_key,
-                &Validation {
-                    algorithms: vec![jsonwebtoken::Algorithm::RS256],
-                    ..Default::default()
-                },
-            )?
-            .claims;
-
+            let validation = Validation {
+                algorithms: vec![jsonwebtoken::Algorithm::RS256],
+                ..Validation::default()
+            };
+            let provider_claims =
+                decode::<ProviderClaims>(&token.0, decoding_key, &validation)?.claims;
             match provider_claims.iss.as_ref() {
                 "accounts.google.com" | "https://accounts.google.com" => Ok(provider_claims),
                 _ => Err(AuthError::Token.into()),

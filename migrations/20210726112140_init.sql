@@ -23,16 +23,9 @@ CREATE TABLE IF NOT EXISTS user_account (
 );
 INSERT INTO user_account (email, password, salt, created_at, updated_at)
 VALUES (
-        'first@user.com',
-        '123',
-        '123456789',
-        '2021-01-01 12:00:00',
-        '2021-01-01 12:00:00'
-    ),
-    (
-        'Second user email',
-        '123',
-        '012345678',
+        'test@example.com',
+        '$argon2i$v=19$m=4096,t=3,p=1$N2FNQ2Rxa253bmszZ0JDRlc3Rzl4TlZpNWtiMkxHUjY$17JxHPpB/1VqBPaFsxrBjKAWx0bayk8V87XWY53krp8',
+        '7aMCdqknwnk3gBCFW7G9xNVi5kb2LGR6',
         '2021-01-01 12:00:00',
         '2021-01-01 12:00:00'
     ) ON CONFLICT DO NOTHING;

@@ -30,6 +30,7 @@ impl AppError {
                 AuthError::Credential(_) => "Credential error".to_owned(),
                 AuthError::Email(_) => "Email error".to_owned(),
                 AuthError::Token => "Token error".to_owned(),
+                AuthError::ExpiredToken => "Expired token".to_owned(),
                 _ => "Unexpected error".to_owned(),
             },
         }
@@ -46,6 +47,7 @@ struct ErrorResponse {
 impl ResponseError for AppError {
     fn status_code(&self) -> StatusCode {
         match self {
+            AppError::AuthenticationError(AuthError::ExpiredToken) => StatusCode::UNAUTHORIZED,
             AppError::AuthenticationError(_) => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
