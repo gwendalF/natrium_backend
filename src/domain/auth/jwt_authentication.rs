@@ -12,6 +12,9 @@ use std::convert::TryFrom;
 
 use super::errors::AuthError;
 
+pub const ACCESS_TOKEN_DURATION: i64 = 15;
+pub const REFRESH_TOKEN_DURATION: i64 = 7;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub aud: String,
@@ -42,14 +45,18 @@ impl Claims {
         let permissions;
         match token_type {
             TokenType::AccessToken => {
-                exp = usize::try_from((Utc::now() + Duration::minutes(10)).timestamp()).unwrap();
+                exp = usize::try_from(
+                    (Utc::now() + Duration::minutes(ACCESS_TOKEN_DURATION)).timestamp(),
+                )
+                .unwrap();
                 permissions = Some(vec![format!("READ_{}", id)]);
             }
 
             TokenType::RefreshToken => {
-                // exp = usize::try_from((Utc::now() + Duration::days(7)).timestamp()).unwrap();
-                exp = usize::try_from((Utc::now() + Duration::hours(1)).timestamp()).unwrap();
-                println!("Wrong duration for refresh token");
+                exp = usize::try_from(
+                    (Utc::now() + Duration::minutes(REFRESH_TOKEN_DURATION)).timestamp(),
+                )
+                .unwrap();
                 permissions = Some(vec![format!("ACCESS_TOKEN_{}", id)]);
             }
         }

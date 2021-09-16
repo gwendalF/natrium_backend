@@ -12,7 +12,7 @@ use super::{
         key_identifier::Kid,
         provider::AuthProvider,
     },
-    jwt_authentication::{Claims, TokenType},
+    jwt_authentication::{Claims, TokenType, REFRESH_TOKEN_DURATION},
 };
 use crate::Result;
 
@@ -47,9 +47,11 @@ impl AuthToken {
 
 impl From<AuthToken> for HttpResponse {
     fn from(token: AuthToken) -> Self {
+        let when = time::OffsetDateTime::now_utc() + time::Duration::days(REFRESH_TOKEN_DURATION);
         let cookie = Cookie::build("refresh_token", &token.refresh_token.0)
             .path("/refresh_token/")
             .secure(true)
+            .expires(when)
             .http_only(true)
             .finish();
         #[derive(serde::Serialize)]
@@ -94,7 +96,7 @@ pub struct ProviderKeySet {
 #[async_trait]
 pub trait UserRepository {
     async fn update_key_set(&self, provider_key_set: &Mutex<ProviderKeySet>) -> Result<()>;
-    async fn check_existing_user_subject(&self, subject: &str) -> Result<i32>;
+    async fn check_existing_user_provider(&self, provider_subject: &str) -> Result<i32>;
     async fn check_existing_user_email(&self, email: &EmailAddress) -> Result<i32>;
     async fn hash(&self, email: &EmailAddress) -> Result<String>;
     async fn create_user_subject(
@@ -103,4 +105,15 @@ pub trait UserRepository {
         provider_email: &EmailAddress,
     ) -> Result<i32>;
     async fn create_user_credential(&self, credential: &Credential) -> Result<i32>;
+}
+
+#[async_trait]
+pub trait TokenRepository {
+    async fn save_token(
+        &self,
+        user_id: i32,
+        refresh_token: &Token,
+        expiration: usize,
+    ) -> Result<()>;
+    async fn check_existing_token(&self, user_id: i32, refresh_token: &Token) -> Result<()>;
 }

@@ -1,33 +1,38 @@
-use std::sync::Mutex;
-
 use async_trait::async_trait;
 use jsonwebtoken::{decode, decode_header, Validation};
+use std::sync::Mutex;
+use std::{convert::TryFrom, sync::Arc};
 
-use crate::domain::auth::{
-    auth_types::{
-        credential::{ClearCredential, Credential},
-        email::EmailAddress,
-        key_identifier::{Kid, KidError},
-        password::PasswordError,
-        provider::AuthProvider,
+use crate::domain::{
+    auth::{
+        auth_types::{
+            credential::{ClearCredential, Credential},
+            email::EmailAddress,
+            key_identifier::{Kid, KidError},
+            password::PasswordError,
+            provider::AuthProvider,
+        },
+        errors::AuthError,
+        jwt_authentication::{AppKey, Claims, ProviderClaims, RefreshKey, REFRESH_TOKEN_DURATION},
+        ports::{AuthToken, IAuthService, ProviderKeySet, Token, TokenRepository, UserRepository},
     },
-    errors::AuthError,
-    jwt_authentication::{AppKey, Claims, ProviderClaims, RefreshKey},
-    ports::{AuthToken, IAuthService, ProviderKeySet, Token, UserRepository},
+    AppError,
 };
 use crate::Result;
 
 #[derive(Clone)]
-pub struct AuthService<T> {
+pub struct AuthService<T, U> {
     pub repository: T,
     pub application_key: AppKey,
     pub refresh_key: RefreshKey,
+    pub token_repository: U,
 }
 
 #[async_trait]
-impl<T> IAuthService for AuthService<T>
+impl<T, U> IAuthService for AuthService<T, U>
 where
     T: UserRepository + Send + Sync,
+    U: TokenRepository + Send + Sync + Clone,
 {
     async fn login_provider(
         &self,
@@ -39,13 +44,17 @@ where
             decode_provider(provider, provider_token, &self.repository, key_set).await?;
         let user_id = self
             .repository
-            .check_existing_user_subject(&provider_claims.sub)
+            .check_existing_user_provider(&provider_claims.sub)
             .await?;
         let token = AuthToken::new(
             user_id,
             &self.application_key.encoding,
             &self.refresh_key.encoding,
         )?;
+        let expiration = usize_second();
+        self.token_repository
+            .save_token(user_id, &token.refresh_token, expiration)
+            .await?;
         Ok(token)
     }
 
@@ -64,6 +73,13 @@ where
                 &self.application_key.encoding,
                 &self.refresh_key.encoding,
             )?;
+            let expiration =
+                chrono::Duration::minutes(REFRESH_TOKEN_DURATION).num_seconds() as usize;
+            self.token_repository
+                .save_token(user_id, &token.refresh_token, expiration)
+                .await?;
+            println!("Token saved with user_id: {}\n", user_id);
+            println!("Refresh_token saved: {}\n", &token.refresh_token.0);
             Ok(token)
         } else {
             Err(AuthError::Password(PasswordError::InvalidPassword).into())
@@ -77,6 +93,14 @@ where
             &self.application_key.encoding,
             &self.refresh_key.encoding,
         )?;
+        let expiration = usize_second();
+        self.token_repository
+            .save_token(
+                user_id,
+                &token.refresh_token,
+                usize::try_from(REFRESH_TOKEN_DURATION).expect("cannot convert"),
+            )
+            .await?;
         Ok(token)
     }
 
@@ -99,6 +123,9 @@ where
             &self.application_key.encoding,
             &self.refresh_key.encoding,
         )?;
+        self.token_repository
+            .save_token(user_id, &token.refresh_token, usize_second())
+            .await?;
         Ok(token)
     }
 
@@ -110,16 +137,24 @@ where
         validation.set_audience(&["natrium"]);
         let refresh_claims =
             decode::<Claims>(&refresh_token.0, &self.refresh_key.decoding, &validation)?.claims;
-        let user_id = self
-            .repository
-            .check_existing_user_subject(&refresh_claims.sub)
-            .await?;
+        let user_id = refresh_claims
+            .sub
+            .parse::<i32>()
+            .map_err(|_| AppError::from(AuthError::Token))?;
         if refresh_claims.permissions == Some(vec![format!("ACCESS_TOKEN_{}", user_id)]) {
-            Ok(AuthToken::new(
+            println!("Refresh_token search: {}\n", &refresh_token.0);
+            self.token_repository
+                .check_existing_token(user_id, refresh_token)
+                .await?;
+            let auth_token = AuthToken::new(
                 user_id,
                 &self.application_key.encoding,
                 &self.refresh_key.encoding,
-            )?)
+            )?;
+            self.token_repository
+                .save_token(user_id, &auth_token.refresh_token, usize_second())
+                .await?;
+            Ok(auth_token)
         } else {
             Err(AuthError::Token.into())
         }
@@ -164,4 +199,8 @@ where
             }
         }
     }
+}
+
+fn usize_second() -> usize {
+    chrono::Duration::days(REFRESH_TOKEN_DURATION).num_seconds() as usize
 }

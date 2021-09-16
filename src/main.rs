@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use std::sync::Mutex;
+
 use crate::config::Config;
 use crate::domain::auth::jwt_authentication;
 use actix_web::{middleware, web, App, HttpServer};
@@ -5,9 +8,11 @@ use application::auth::auth_service_impl::AuthService;
 use domain::AppError;
 use domain::Result;
 use infrastructure::auth::postgres_repo::UserRepositoryImpl;
+use infrastructure::auth::redis_repo::TokenRepositoryImpl;
 use jsonwebtoken::{DecodingKey, EncodingKey};
+use redis::AsyncCommands;
+use redis::ConnectionLike;
 use sqlx::PgPool;
-
 mod application;
 mod config;
 mod domain;
@@ -29,6 +34,13 @@ async fn main() -> Result<()> {
         encoding: encoding_refresh,
         decoding: decoding_refresh,
     };
+    println!("Before redis");
+    let redis_client =
+        redis::Client::open(format!("redis://{}/", config.server.host)).expect("redis client");
+    let mut redis_connection = redis_client
+        .get_multiplexed_tokio_connection()
+        .await
+        .expect("redis connection");
     Ok(HttpServer::new(move || {
         // let auth = HttpAuthentication::bearer(jwt_authentication::validator);
         App::new()
@@ -39,6 +51,9 @@ async fn main() -> Result<()> {
                     },
                     application_key: jwt_key.clone(),
                     refresh_key: refresh_key.clone(),
+                    token_repository: TokenRepositoryImpl {
+                        token_repo: redis_connection.clone(),
+                    },
                 };
                 infrastructure::auth::auth_controller::configure(web::Data::new(service), cfg)
             })
