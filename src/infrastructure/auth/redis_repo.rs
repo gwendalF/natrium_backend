@@ -1,10 +1,11 @@
+use crate::domain::auth::auth_types::token::Token;
 use crate::domain::auth::errors::AuthError;
-use crate::domain::auth::ports::{Token, TokenRepository};
+use crate::domain::auth::ports::TokenRepository;
 use crate::Result;
 use async_trait::async_trait;
 use redis::AsyncCommands;
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct TokenRepositoryImpl {
     pub token_repo: redis::aio::MultiplexedConnection,
 }

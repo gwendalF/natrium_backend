@@ -1,7 +1,8 @@
 use crate::domain::auth::auth_types::credential::{ClearCredential, Credential};
-use crate::domain::auth::auth_types::provider::AuthProvider;
+use crate::domain::auth::auth_types::provider::{AuthProvider, ProviderKeySet};
+use crate::domain::auth::auth_types::token::Token;
 use crate::domain::auth::errors::AuthError;
-use crate::domain::auth::ports::{IAuthService, ProviderKeySet, Token};
+use crate::domain::auth::ports::IAuthService;
 use crate::{AppError, Result};
 use actix_web::{error, web, HttpMessage, HttpRequest, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;

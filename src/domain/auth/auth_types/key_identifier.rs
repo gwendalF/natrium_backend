@@ -20,7 +20,7 @@ fn validate(value: String) -> Result<String, KidError> {
     }
 }
 
-#[derive(Error, Debug, Clone, Copy)]
+#[derive(Error, Debug)]
 pub enum KidError {
     #[error("Invalid kid")]
     InvalidKid,

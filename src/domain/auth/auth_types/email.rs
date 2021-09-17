@@ -10,6 +10,7 @@ pub enum EmailError {
     AlreadyUsedEmail,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct EmailAddress(String);
 
 fn validate(email: String) -> Result<String, EmailError> {
@@ -33,5 +34,18 @@ impl EmailAddress {
 
     pub fn value(&self) -> &str {
         &self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+    #[rstest]
+    #[case("wrong@.com", false)]
+    #[case("good@google.com", true)]
+    fn test_email(#[case] email_str: &str, #[case] is_ok: bool) {
+        let email_address = EmailAddress::new(email_str.to_owned());
+        assert_eq!(email_address.is_ok(), is_ok);
     }
 }

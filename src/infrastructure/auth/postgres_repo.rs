@@ -5,8 +5,9 @@ use crate::domain::auth::auth_types::credential::Credential;
 use crate::domain::auth::auth_types::key_identifier::Kid;
 
 use crate::domain::auth::auth_types::password::PasswordError;
+use crate::domain::auth::auth_types::provider::ProviderKeySet;
 use crate::domain::auth::errors::AuthError;
-use crate::domain::auth::ports::{ProviderKeySet, UserRepository};
+use crate::domain::auth::ports::UserRepository;
 
 use crate::domain::auth::auth_types::email::{EmailAddress, EmailError};
 use crate::{AppError, Result};

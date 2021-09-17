@@ -40,7 +40,7 @@ impl Claims {
 
             TokenType::RefreshToken => {
                 exp = usize::try_from(
-                    (chrono::Utc::now() + chrono::Duration::minutes(REFRESH_TOKEN_DURATION))
+                    (chrono::Utc::now() + chrono::Duration::days(REFRESH_TOKEN_DURATION))
                         .timestamp(),
                 )
                 .unwrap();

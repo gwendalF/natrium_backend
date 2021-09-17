@@ -12,16 +12,16 @@ use crate::domain::{
             jwt_key::{AccessKey, RefreshKey},
             key_identifier::{Kid, KidError},
             password::PasswordError,
-            provider::AuthProvider,
+            provider::{AuthProvider, ProviderKeySet},
+            token::{AuthToken, Token},
         },
         errors::AuthError,
-        ports::{AuthToken, IAuthService, ProviderKeySet, Token, TokenRepository, UserRepository},
+        ports::{IAuthService, TokenRepository, UserRepository},
     },
     AppError,
 };
 use crate::Result;
 
-#[derive(Clone)]
 pub struct AuthService<T, U> {
     pub repository: T,
     pub application_key: AccessKey,
@@ -33,7 +33,7 @@ pub struct AuthService<T, U> {
 impl<T, U> IAuthService for AuthService<T, U>
 where
     T: UserRepository + Send + Sync,
-    U: TokenRepository + Send + Sync + Clone,
+    U: TokenRepository + Send + Sync,
 {
     async fn login_provider(
         &self,
@@ -79,8 +79,6 @@ where
             self.token_repository
                 .save_token(user_id, &token.refresh_token, expiration)
                 .await?;
-            println!("Token saved with user_id: {}\n", user_id);
-            println!("Refresh_token saved: {}\n", &token.refresh_token.0);
             Ok(token)
         } else {
             Err(AuthError::Password(PasswordError::InvalidPassword).into())
@@ -139,7 +137,6 @@ where
             .parse::<i32>()
             .map_err(|_| AppError::from(AuthError::Token))?;
         if refresh_claims.permissions == Some(vec![format!("ACCESS_TOKEN_{}", user_id)]) {
-            println!("Refresh_token search: {}\n", &refresh_token.0);
             self.token_repository
                 .check_existing_token(user_id, refresh_token)
                 .await?;
@@ -200,4 +197,70 @@ where
 
 fn second_usize() -> usize {
     chrono::Duration::days(REFRESH_TOKEN_DURATION).num_seconds() as usize
+}
+
+#[cfg(test)]
+mod tests {
+    use std::convert::TryFrom;
+
+    use super::*;
+    use crate::domain::auth::{
+        auth_types::salt::Salt,
+        ports::{MockTokenRepository, MockUserRepository},
+    };
+    use jsonwebtoken::{DecodingKey, EncodingKey};
+    use mockall::predicate::*;
+
+    #[actix_web::main]
+    #[test]
+    async fn test_credential_login_success() {
+        let credential = ClearCredential {
+            email: "test@example.com".to_owned(),
+            password: "password".to_owned(),
+        };
+        let salt = Salt::try_from("7aMCdqknwnk3gBCFW7G9xNVi5kb2LGR6".to_owned()).unwrap();
+        let user_hash = argon2::hash_encoded(
+            &credential.password.as_bytes(),
+            salt.value().as_bytes(),
+            &argon2::Config::default(),
+        )
+        .unwrap();
+        let mut user_repo = MockUserRepository::new();
+        user_repo
+            .expect_check_existing_user_email()
+            .returning(|_| Ok(1));
+
+        let mut token_repository = MockTokenRepository::new();
+        user_repo
+            .expect_hash()
+            .returning(move |_| Ok(user_hash.clone()));
+        token_repository
+            .expect_save_token()
+            .returning(|_, _, _| Ok(()));
+        let encoding = EncodingKey::from_secret("secret_key".as_bytes());
+        let decoding = DecodingKey::from_secret("secret_key".as_bytes()).into_static();
+        let application_key = AccessKey {
+            encoding: encoding.clone(),
+            decoding: decoding.clone(),
+        };
+        let refresh_key = RefreshKey {
+            encoding: encoding.clone(),
+            decoding,
+        };
+        let sut = AuthService {
+            repository: user_repo,
+            application_key,
+            refresh_key,
+            token_repository,
+        };
+        let actual = sut.login_credential(&credential).await.unwrap();
+        let expected = AuthToken::new(1, &encoding, &encoding).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[actix_web::main]
+    #[test]
+    async fn test_login_google() {
+        let user_id = 1;
+    }
 }
