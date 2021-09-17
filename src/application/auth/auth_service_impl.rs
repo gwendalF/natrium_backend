@@ -1,19 +1,20 @@
+use std::sync::Mutex;
+
 use async_trait::async_trait;
 use jsonwebtoken::{decode, decode_header, Validation};
-use std::sync::Mutex;
-use std::{convert::TryFrom, sync::Arc};
 
 use crate::domain::{
     auth::{
         auth_types::{
+            claims::{Claims, ProviderClaims, REFRESH_TOKEN_DURATION},
             credential::{ClearCredential, Credential},
             email::EmailAddress,
+            jwt_key::{AccessKey, RefreshKey},
             key_identifier::{Kid, KidError},
             password::PasswordError,
             provider::AuthProvider,
         },
         errors::AuthError,
-        jwt_authentication::{AppKey, Claims, ProviderClaims, RefreshKey, REFRESH_TOKEN_DURATION},
         ports::{AuthToken, IAuthService, ProviderKeySet, Token, TokenRepository, UserRepository},
     },
     AppError,
@@ -23,7 +24,7 @@ use crate::Result;
 #[derive(Clone)]
 pub struct AuthService<T, U> {
     pub repository: T,
-    pub application_key: AppKey,
+    pub application_key: AccessKey,
     pub refresh_key: RefreshKey,
     pub token_repository: U,
 }
@@ -51,7 +52,7 @@ where
             &self.application_key.encoding,
             &self.refresh_key.encoding,
         )?;
-        let expiration = usize_second();
+        let expiration = second_usize();
         self.token_repository
             .save_token(user_id, &token.refresh_token, expiration)
             .await?;
@@ -93,13 +94,9 @@ where
             &self.application_key.encoding,
             &self.refresh_key.encoding,
         )?;
-        let expiration = usize_second();
+        let expiration = second_usize();
         self.token_repository
-            .save_token(
-                user_id,
-                &token.refresh_token,
-                usize::try_from(REFRESH_TOKEN_DURATION).expect("cannot convert"),
-            )
+            .save_token(user_id, &token.refresh_token, expiration)
             .await?;
         Ok(token)
     }
@@ -124,7 +121,7 @@ where
             &self.refresh_key.encoding,
         )?;
         self.token_repository
-            .save_token(user_id, &token.refresh_token, usize_second())
+            .save_token(user_id, &token.refresh_token, second_usize())
             .await?;
         Ok(token)
     }
@@ -152,7 +149,7 @@ where
                 &self.refresh_key.encoding,
             )?;
             self.token_repository
-                .save_token(user_id, &auth_token.refresh_token, usize_second())
+                .save_token(user_id, &auth_token.refresh_token, second_usize())
                 .await?;
             Ok(auth_token)
         } else {
@@ -201,6 +198,6 @@ where
     }
 }
 
-fn usize_second() -> usize {
+fn second_usize() -> usize {
     chrono::Duration::days(REFRESH_TOKEN_DURATION).num_seconds() as usize
 }

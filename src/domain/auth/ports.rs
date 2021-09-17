@@ -5,16 +5,15 @@ use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 
-use super::{
-    auth_types::{
-        credential::{ClearCredential, Credential},
-        email::EmailAddress,
-        key_identifier::Kid,
-        provider::AuthProvider,
-    },
-    jwt_authentication::{Claims, TokenType, REFRESH_TOKEN_DURATION},
+use super::auth_types::{
+    claims::Claims,
+    credential::{ClearCredential, Credential},
+    email::EmailAddress,
+    key_identifier::Kid,
+    provider::AuthProvider,
+    token::TokenType,
 };
-use crate::Result;
+use crate::{domain::auth::auth_types::claims::REFRESH_TOKEN_DURATION, Result};
 
 #[derive(Debug, serde::Serialize)]
 pub struct Token(pub String);
